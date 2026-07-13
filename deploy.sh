@@ -21,7 +21,7 @@ set -euo pipefail
 ROOT="${WORKMATE_SYNCED_ROOT:-/workspace/workmate}"
 PLAYBOOKS_DEST="$ROOT/.workmate/playbooks"
 SKILLS_DEST="$ROOT/.workmate/skills"
-SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC="$(dirname "${BASH_SOURCE[0]}")"
 
 DRY=""
 if [[ "${1:-}" == "--dry-run" || "${1:-}" == "-n" ]]; then
