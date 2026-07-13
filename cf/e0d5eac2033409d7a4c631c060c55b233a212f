@@ -1,0 +1,22 @@
+security-audit-report/PLAYBOOK.md
+  s_55cd8e5026cec4::t_a32b97baa3da8f 140
+  s_55cd8e5026cec4::t_2a46dcd2f5f7b5 542
+  s_55cd8e5026cec4::t_b0fc458c2cbe91 7
+  s_55cd8e5026cec4::t_3a91ea813a4d20 164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "cfe0d5eac2033409d7a4c631c060c55b233a212f",
+  "prompts": {},
+  "sessions": {
+    "s_55cd8e5026cec4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4803190d-c8af-4ab0-b403-6387ae0796b9",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
