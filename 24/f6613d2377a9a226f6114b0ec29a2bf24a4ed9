@@ -1,0 +1,94 @@
+skills/code-security/scripts/generate_worklist.py
+  s_f189f9b4934c1c::t_fa857faa43135f 1-182
+security-audit-init/PLAYBOOK.md
+  s_f189f9b4934c1c::t_ad7219aee25709 8-39
+  s_f189f9b4934c1c::t_a3cbc576110aa2 86-100,148,162-163,201,217-218
+  s_f189f9b4934c1c::t_5096bff00d52db 101,110-111,114-120
+  s_f189f9b4934c1c::t_03029e5b59c2d6 40
+  s_f189f9b4934c1c::t_efd1ffcde63c21 4-6
+  s_f189f9b4934c1c::t_705d63407af851 7
+  s_f189f9b4934c1c::t_04818c9a0eeea5 131-135
+  s_f189f9b4934c1c::t_b56c4451bca711 102-109,112,122-130,250
+  s_f189f9b4934c1c::t_c2999d0c0dc27d 121
+  s_f189f9b4934c1c::t_7cddf07eccfcfb 67-72
+  s_f189f9b4934c1c::t_7acada876d2c4a 136-137
+  s_f189f9b4934c1c::t_2d08cc4ef2ba34 138-140
+  s_f189f9b4934c1c::t_2a9d8e66de9c77 57-65
+  s_f189f9b4934c1c::t_6b726213bc854f 56,73-85
+  s_f189f9b4934c1c::t_753a2f2062299a 66
+  s_f189f9b4934c1c::t_f812b9876cf30b 113
+  s_f189f9b4934c1c::t_fd0310e0d1feb9 41-55
+  s_f189f9b4934c1c::t_8b29c438510ffd 1-3
+  s_f189f9b4934c1c::t_095c22c3015a3e 141-143,145-147
+  s_f189f9b4934c1c::t_130cc964eb9f6c 149-151,159-161
+  s_f189f9b4934c1c::t_c2f817eb9b7a79 164-166,198-200
+  s_f189f9b4934c1c::t_a90f6e119cbb89 202-204,214-216
+  s_f189f9b4934c1c::t_dbc516dcef1dfc 219-221,247-249
+  s_f189f9b4934c1c::t_d3adbd9bfd6044 251-253
+security-audit-report/PLAYBOOK.md
+  s_f189f9b4934c1c::t_d74c60cf0c93ad 102-104
+  s_f189f9b4934c1c::t_d4bdb3273e0a09 494-496
+  s_f189f9b4934c1c::t_6c55612f33a940 493
+  s_f189f9b4934c1c::t_1f2c76753940ef 106-492
+  s_f189f9b4934c1c::t_78a5e5318cc6a6 105
+  s_f189f9b4934c1c::t_dd52a7c636516b 99-101
+  s_f189f9b4934c1c::t_869877536c66eb 497-499
+.gitignore
+  s_f189f9b4934c1c::t_7e0e3b9672720f 1-6
+skills/code-security/guides/false-positive-traps.md
+  s_9da80d1156c590::t_7369d7a050c68b 1-113
+skills/code-security/SKILL.md
+  s_f189f9b4934c1c::t_0b0bab1ae8a1b2 116-118
+  s_f189f9b4934c1c::t_2bff0b91f20786 119-128
+  s_f189f9b4934c1c::t_4a298e4f82045a 113-115
+security-audit/PLAYBOOK.md
+  s_f189f9b4934c1c::t_6f8f43f0a1e19f 19-21,25,35
+  s_f189f9b4934c1c::t_954e22674d4e2c 16-18
+  s_f189f9b4934c1c::t_e945f06c497103 13-15
+  s_f189f9b4934c1c::t_aead3f18e551bc 10-12
+  s_f189f9b4934c1c::t_14897323364d9d 22-24
+  s_f189f9b4934c1c::t_4e518bfa630430 26-28,32-34
+  s_f189f9b4934c1c::t_644d403a9b4d1c 36-38
+security-audit-challenger/PLAYBOOK.md
+  s_f189f9b4934c1c::t_84618b4cc38e6c 40-42
+  s_f189f9b4934c1c::t_d75b6d5d4559b7 35-37
+  s_f189f9b4934c1c::t_a0c7c4de620b0f 38-39
+  s_f189f9b4934c1c::t_12892906dd954c 32-34
+  s_f189f9b4934c1c::t_4b96f2d1a73d99 43-45
+skills/code-security/scripts/reconcile_coverage.py
+  s_f189f9b4934c1c::t_88b4ffe74e5a27 1-114
+skills/code-security/scripts/init_run_dir.py
+  s_f189f9b4934c1c::t_3714e16e814f38 3-5
+  s_f189f9b4934c1c::t_7c2cb5d75c6d7f 6-9
+  s_f189f9b4934c1c::t_e582b540d70c7f 33-43
+  s_f189f9b4934c1c::t_f38dc677414176 10-32
+  s_f189f9b4934c1c::t_ed7c4fbfb015bb 44-46
+  s_f189f9b4934c1c::t_2f8105cd32bf39 1-2
+  s_f189f9b4934c1c::t_42ee5b79245afc 47-49
+skills/code-security/guides/baseline-calibration.md
+  s_9da80d1156c590::t_5f1c2b767d2539 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "24f6613d2377a9a226f6114b0ec29a2bf24a4ed9",
+  "prompts": {},
+  "sessions": {
+    "s_9da80d1156c590": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "58010324-8032-4b92-b046-c4a46794f613",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    },
+    "s_f189f9b4934c1c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9bc81786-d3b1-4339-bdb1-92aa2363e600",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
