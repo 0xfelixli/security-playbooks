@@ -1,0 +1,23 @@
+deploy.sh
+  s_f189f9b4934c1c::t_d6b3bae9b73151 1-21,24,26-37,39-46,48-55,57-65
+  s_f189f9b4934c1c::t_e0479b2c22b8de 56
+  s_f189f9b4934c1c::t_7a944c6b65fd36 22-23,25
+  s_f189f9b4934c1c::t_d018169b38a781 47
+  s_f189f9b4934c1c::t_7ecd4c10a05e45 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "dca84b0a6c6c4b1d0b8d63e42103508f9768c9ee",
+  "prompts": {},
+  "sessions": {
+    "s_f189f9b4934c1c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9bc81786-d3b1-4339-bdb1-92aa2363e600",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
