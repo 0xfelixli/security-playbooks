@@ -4,7 +4,7 @@ uri: builtin://security-audit-report
 version: "2026.07.13"
 title: Security Audit Report
 summary: |
-  安全审计报告阶段：去重 → parallel challenger 对抗复核 → 对账会签 → 完整性批评 → 生成 findings.json。security-audit 第三阶段子 playbook。
+  安全审计报告阶段：去重 → 顺序 challenger 对抗复核 → 对账会签 → 完整性批评 → 生成 findings.json。security-audit 第三阶段子 playbook。
 attended_mode: unattended
 approval_policy: security-owner
 approval_policies:
@@ -137,7 +137,7 @@ workflow:
       output: merge_prep
 
   - parallel:
-      concurrent: true
+      concurrent: false
       for_each: "{{ artifacts.merge_prep.challenger_batches }}"
       as: challenger_batch
       body:
@@ -161,7 +161,7 @@ workflow:
 
         **字段、frontmatter、index.jsonl schema**：按 `{{ inputs.audit_skills_dir }}/SCHEMA-issue.md` 执行。执行前 Read 一次。
 
-        challenger 对抗复核已由上一步的框架 parallel 内联并行运行完毕，你无需创建或等待任何子 run。
+        challenger 对抗复核已由上一步的框架逐批顺序内联运行完毕，你无需创建或等待任何子 run。
         以下 discovery 阶段统计由上一步产出，原样透传到本步 output：
         - total_issues: {{ artifacts.merge_prep.total_issues }}
         - discovery_confirmed: {{ artifacts.merge_prep.discovery_confirmed }}
@@ -539,4 +539,4 @@ workflow:
 
 ---
 
-安全审计报告阶段：跨类别去重 → 框架 parallel 内联并行 challenger 对抗复核 → 对账+会签 → 生成 findings.json 和 PoC 骨架。security-audit 主 playbook 的第三阶段子 playbook。
+安全审计报告阶段：跨类别去重 → 框架逐批顺序内联 challenger 对抗复核 → 对账+会签 → 生成 findings.json 和 PoC 骨架。security-audit 主 playbook 的第三阶段子 playbook。
