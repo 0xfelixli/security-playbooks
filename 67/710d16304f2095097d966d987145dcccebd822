@@ -1,0 +1,76 @@
+.gitignore
+  s_f189f9b4934c1c::t_7e0e3b9672720f 1-6
+security-audit-init/PLAYBOOK.md
+  s_f189f9b4934c1c::t_7acada876d2c4a 136-137
+  s_f189f9b4934c1c::t_705d63407af851 7
+  s_f189f9b4934c1c::t_6b726213bc854f 56,73-85
+  s_f189f9b4934c1c::t_03029e5b59c2d6 40
+  s_f189f9b4934c1c::t_753a2f2062299a 66
+  s_f189f9b4934c1c::t_5096bff00d52db 101,110-111,114-120
+  s_f189f9b4934c1c::t_b56c4451bca711 102-109,112,122-130
+  s_f189f9b4934c1c::t_efd1ffcde63c21 4-6
+  s_f189f9b4934c1c::t_ad7219aee25709 8-10,37-39
+  s_f189f9b4934c1c::t_fd0310e0d1feb9 41-43,53-55
+  s_f189f9b4934c1c::t_2a9d8e66de9c77 57-59,63-65
+  s_f189f9b4934c1c::t_7cddf07eccfcfb 67-72
+  s_f189f9b4934c1c::t_a3cbc576110aa2 86-88,98-100
+  s_f189f9b4934c1c::t_f812b9876cf30b 113
+  s_f189f9b4934c1c::t_c2999d0c0dc27d 121
+  s_f189f9b4934c1c::t_04818c9a0eeea5 131-135
+  s_f189f9b4934c1c::t_2d08cc4ef2ba34 138-140
+security-audit-report/PLAYBOOK.md
+  s_f189f9b4934c1c::t_6c55612f33a940 493
+  s_f189f9b4934c1c::t_78a5e5318cc6a6 105
+  s_f189f9b4934c1c::t_d74c60cf0c93ad 102-104
+  s_f189f9b4934c1c::t_1f2c76753940ef 106-108,490-492
+  s_f189f9b4934c1c::t_d4bdb3273e0a09 494-496
+security-audit-challenger/PLAYBOOK.md
+  s_f189f9b4934c1c::t_a0c7c4de620b0f 38-39
+  s_f189f9b4934c1c::t_d75b6d5d4559b7 35-37
+  s_f189f9b4934c1c::t_84618b4cc38e6c 40-42
+skills/code-security/scripts/init_run_dir.py
+  s_f189f9b4934c1c::t_e582b540d70c7f 33-43
+  s_f189f9b4934c1c::t_7c2cb5d75c6d7f 6-9
+  s_f189f9b4934c1c::t_3714e16e814f38 3-5
+  s_f189f9b4934c1c::t_f38dc677414176 10-12,30-32
+  s_f189f9b4934c1c::t_ed7c4fbfb015bb 44-46
+skills/code-security/SKILL.md
+  s_f189f9b4934c1c::t_2bff0b91f20786 119-128
+  s_f189f9b4934c1c::t_0b0bab1ae8a1b2 116-118
+security-audit/PLAYBOOK.md
+  s_f189f9b4934c1c::t_954e22674d4e2c 16-18
+  s_f189f9b4934c1c::t_e945f06c497103 13-15
+  s_f189f9b4934c1c::t_6f8f43f0a1e19f 19-21
+skills/code-security/guides/baseline-calibration.md
+  s_9da80d1156c590::t_5f1c2b767d2539 1-32
+skills/code-security/guides/false-positive-traps.md
+  s_9da80d1156c590::t_7369d7a050c68b 1-113
+skills/code-security/scripts/generate_worklist.py
+  s_f189f9b4934c1c::t_fa857faa43135f 1-182
+skills/code-security/scripts/reconcile_coverage.py
+  s_f189f9b4934c1c::t_88b4ffe74e5a27 1-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "67710d16304f2095097d966d987145dcccebd822",
+  "prompts": {},
+  "sessions": {
+    "s_9da80d1156c590": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "58010324-8032-4b92-b046-c4a46794f613",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    },
+    "s_f189f9b4934c1c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9bc81786-d3b1-4339-bdb1-92aa2363e600",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
