@@ -1,10 +1,10 @@
 ---
 id: security-audit-challenger
 uri: builtin://security-audit-challenger
-version: "2.0"
+version: "2026.07.13"
 title: Security Audit Challenger
 summary: |
-  对已写入的 issue 做对抗复核（独立怀疑者视角）：基于代码证据给出 adversarial_verdict，回写 issue 文件。security-audit 的 sub-playbook；也可独立调用重审单条 issue。
+  对已写入 issue 做独立对抗复核：基于代码证据给出 adversarial_verdict 回写。security-audit 的 sub-playbook，也可独立调用。
 attended_mode: unattended
 approval_policy: security-owner
 approval_policies:
@@ -35,8 +35,6 @@ actors:
   challenger:
     provider: claude
     model: claude-opus-4-8
-    # opus 单价高，给单 actor 成本兜底防止取证读代码时失控；正常单批复核远低于此，超限视为异常。
-    max_cost_usd: 30.0
     mode: edit
     profile: security-audit-reviewer
     fs_read_paths: ["{{ inputs.audit_skills }}"]

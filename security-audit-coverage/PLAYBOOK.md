@@ -1,15 +1,10 @@
 ---
 id: security-audit-coverage
 uri: builtin://security-audit-coverage
-version: "2.0"
+version: "2026.07.13"
 title: Security Audit Coverage
 summary: |
-  安全审计唯一发现阶段：预扫描（grep 规则引擎）+ authn 兄弟端点横向对比（IDOR 召回）
-  两路信号播种，与 system_analyst 的 high_risk_paths 一起喂给全仓文件级穷举审查
-  （unit_file_analyst 跑确定性脚本按函数单元数分组）→ 框架 parallel 并行执行 unit-review（每个单元逐一
-  穷举 8 类别，三路信号作为强制关注点并入）→ 确定性覆盖核对（AST worklist 对账）→
-  框架 parallel 补审缺失单元 → coverage_finalizer 重新对账 + 写文件级覆盖 coverage.json。
-  覆盖率 = 全仓函数单元的 per-unit record 覆盖。security-audit 主 playbook 的第二阶段子 playbook。
+  安全审计发现阶段：预扫描/authn 信号播种 → 全仓文件级穷举审查（parallel unit-review）→ 确定性覆盖核对补审。security-audit 第二阶段子 playbook。
 attended_mode: unattended
 approval_policy: security-owner
 approval_policies:
@@ -254,9 +249,6 @@ workflow:
         **禁用 shell 重定向写文件**（会被写路径 hook 拦截）：
 
         high_risk_paths：{{ inputs.high_risk_paths }}
-
-        **不要自己创建审查子 run，也不要阻塞等待子 run 完成。**
-        框架将在下一步通过 `parallel` 调度 `security-audit-unit-review`。
 
         ## 回传与收尾（务必遵守）
 

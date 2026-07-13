@@ -1,14 +1,10 @@
 ---
 id: security-audit-init
 uri: builtin://security-audit-init
-version: "1.1"
+version: "2026.07.13"
 title: Security Audit Init
 summary: |
-  安全审计初始化阶段：定位 audit_skills（同步根共享 skills > bundle 内置，运行时自动推导）
-  → 脚手架（init_run_dir.py 建 RUN_DIR + 解析路径）→ 系统理解（analysis/，核心地基）
-  → 入口枚举与分类（带 auth-model 辅助，不盲判）。
-  输出 RUN_DIR、推荐审计类别、高风险路径和系统分析文档，供发现+覆盖阶段（coverage）使用。
-  security-audit 主 playbook 的第一阶段子 playbook。
+  安全审计初始化：定位 skills → 建 RUN_DIR → 系统理解（analysis/）→ 入口枚举分类。security-audit 第一阶段子 playbook。
 attended_mode: unattended
 approval_policy: security-owner
 approval_policies:

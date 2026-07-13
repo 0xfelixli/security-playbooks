@@ -1,13 +1,10 @@
 ---
 id: security-audit-unit-review
 uri: builtin://security-audit-unit-review
-version: "2.0"
+version: "2026.07.13"
 title: Security Audit Unit Review
 summary: |
-  文件级穷举安全审查：接收一组文件，穷举读取每个函数/方法，跨全部 8 个安全类别寻找漏洞，
-  不依赖预设 suspects 或 grep 模式；同时读取 prescan（grep）、high_risk_paths、
-  authn 兄弟端点横向对比三路信号，过滤出属于自己文件的条目作为强制关注点并入穷举审查。
-  由 coverage 阶段的框架 parallel 按分组内联 call，security-audit 的 sub-playbook。
+  文件级穷举安全审查：对一组文件逐函数穷举 8 类漏洞，并入三路信号作为强制关注点。security-audit 的 sub-playbook。
 attended_mode: unattended
 approval_policy: security-owner
 approval_policies:
@@ -194,6 +191,16 @@ workflow:
         discovery 阶段写齐所有必填字段（`canonical` 固定写 `true`）。
         `source_pass` 字段填 `unit_review`，便于后续统计区分来源。
         **不要预填**合并阶段字段（`duplicate_files`/`superseded_by` 等）和对抗复核字段。
+
+        **同时写机读旁路 issue-meta（供 report 阶段确定性去重脚本 merge_dedup.py 读取，避免下游解析 LLM 手写 YAML）**：
+        每写一条 issue `.md`，就用 apply_patch 在 `{{ inputs.run_dir }}/work/issue-meta/<issue_id>.json`
+        写一份**同字段值的机读副本**（纯 JSON，值必须与 `.md` frontmatter 完全一致）：
+        ```json
+        {"issue_id":"<同 stem>","issue_file":"<该 .md 的绝对路径>","discovery_verdict":"confirmed","discovery_category":["authn"],"primary_location":"src/api/wallet.py:142","primary_symbol":"WalletService.get_balance","vuln_type":"IDOR","cwe":"CWE-639","severity":"HIGH","authn_level":"authenticated","affected_entrypoints":["http:GET:/wallet/balance"]}
+        ```
+        字段取值一律来自你刚写的 `.md` frontmatter（`affected_entrypoints`/`discovery_category` 为数组、
+        缺失填 `[]`；`primary_symbol` 无法确定填 `""`）。**这份 JSON 是 merge_dedup 去重的唯一数据源**，
+        必须每条 issue 都写、且 `issue_file` 用绝对路径。
 
         **cwe 字段与"同位置多漏洞"拆分规则（强制，防错合并）**：
         - `cwe` 是必填字段，格式 `"CWE-<number>"`（如 `"CWE-639"`、`"CWE-89"`）。优先从

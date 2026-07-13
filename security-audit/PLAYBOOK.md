@@ -1,10 +1,10 @@
 ---
 id: security-audit
 uri: builtin://security-audit
-version: "7.0"
+version: "2026.07.13"
 title: Security Audit
 summary: |
-  全仓代码安全审计：① 全仓文件级穷举审查（unit-based，覆盖仓库**全部生产源码文件**——Python 经 AST 拆成函数/方法/模块单元，非 Python 以文件级单元纳入；确定性 worklist + per-unit record 对账防偷懒；排除 tests/migrations/vendor/生成产物），融合预扫描（grep）+ authn 兄弟端点横向对比 + high_risk_paths 三路信号作为强制关注点；② 独立对抗复核。流程：系统理解（analysis/）→ 枚举入口 → 全仓文件级穷举审查（三路信号播种）→ 确定性覆盖核对/补审 → 跨类别去重 → 独立 challenger 对抗复核（含反驳自检+补漏扫描）→ 输出 findings.json + coverage.json + coverage-audit.json + verify/ 下 PoC 脚本骨架。
+  全仓代码安全审计 orchestrator：文件级穷举审查（三路信号播种）+ 独立 challenger 对抗复核，输出机读 findings.json 与覆盖报告。
 attended_mode: unattended
 approval_policy: security-owner
 approval_policies:
@@ -13,9 +13,6 @@ approval_policies:
     sensitive: approve
 limits:
   wall_clock_seconds: 21600
-  # 成本兜底：非预期开销，仅用于拦截失控（如死循环重试/扇出爆炸），并非正常一次审计的预算。
-  # 全仓穷举 + parallel 扇出 + opus 对抗复核属重成本流程，请按目标仓库规模与实际预算调高/调低。
-  total_cost_usd: 80.0
 inputs:
   repo_path:
     type: string

@@ -148,9 +148,19 @@ challenger 在文件末尾 **append**（不重写已有内容）：
 
 ---
 
+## 机读旁路 `<RUN_DIR>/work/issue-meta/<issue_id>.json`（unit_reviewer 写）
+
+每写一条 issue `.md`，unit_reviewer **同时**写一份同名 JSON 旁路，字段值与 `.md` frontmatter 完全一致，作为 report 阶段确定性去重脚本 `merge_dedup.py` 的**唯一数据源**（脚本读纯 JSON、不解析 LLM 手写 YAML，稳健性对齐 coverage 的 unit-records）：
+
+```json
+{"issue_id":"...","issue_file":"/abs/issues/<issue_id>.md","discovery_verdict":"confirmed","discovery_category":["authn"],"primary_location":"src/api/wallet.py:142","primary_symbol":"WalletService.get_balance","vuln_type":"IDOR","cwe":"CWE-639","severity":"HIGH","authn_level":"authenticated","affected_entrypoints":["http:GET:/wallet/balance"]}
+```
+
+只含 discovery 期字段（不含 `canonical`/`duplicate_files`/对抗字段——那些由 `merge_dedup.py` 与 challenger 后续写入 `.md` frontmatter）。`issue_file` 用绝对路径；数组字段缺失填 `[]`，`primary_symbol` 不定填 `""`。
+
 ## 索引文件 `<RUN_DIR>/issues/index.jsonl`
 
-由 issue_merger 写，每行一个 canonical issue：
+由 `merge_dedup.py`（issue_merger 调用）写，每行一个 canonical issue：
 
 ```json
 {"issue_id":"idor-wallet-balance-a1b2c3d4","issue_file":"/abs/path/issues/idor-wallet-balance-a1b2c3d4.md","canonical":true,"discovery_verdict":"confirmed","adversarial_verdict":null,"final_verdict":null,"severity_downgraded_to":null,"severity_upgraded_to":null,"discovery_category":["authn"],"primary_location":"src/api/wallet.py:142","primary_symbol":"WalletService.get_balance","vuln_type":"IDOR","cwe":"CWE-639","severity":"HIGH","authn_level":"authenticated","affected_entrypoints":["http:GET:/wallet/balance"],"duplicate_files":[]}

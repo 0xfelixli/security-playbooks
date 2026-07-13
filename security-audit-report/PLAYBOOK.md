@@ -1,12 +1,10 @@
 ---
 id: security-audit-report
 uri: builtin://security-audit-report
-version: "1.0"
+version: "2026.07.13"
 title: Security Audit Report
 summary: |
-  安全审计报告阶段：跨类别去重（issue_merger）→ 框架 parallel 内联并行 challenger 对抗复核 → 对账+会签统计（issue_merger_finalize）
-  → 宏观完整性批评（coverage_critic，跨模型指出零 issue 盲区）→ 最终汇总并生成 findings.json / verify/ PoC 骨架（final_reporter）。
-  security-audit 主 playbook 的第三阶段子 playbook。
+  安全审计报告阶段：去重 → parallel challenger 对抗复核 → 对账会签 → 完整性批评 → 生成 findings.json。security-audit 第三阶段子 playbook。
 attended_mode: unattended
 approval_policy: security-owner
 approval_policies:
@@ -74,53 +72,56 @@ workflow:
 
         **字段、frontmatter、index.jsonl schema**：按 `{{ inputs.audit_skills_dir }}/SCHEMA-issue.md` 执行。执行前 Read 一次。
 
-        ## 任务 A：综合去重 + 写 index.jsonl + discovery 评分
+        ## 任务 A：跑脚本做确定性去重 + 写 index.jsonl（禁止手工去重）
 
-        1. 读 `RUN_DIR/issues/` 下所有 issue 文件（frontmatter 已由 discovery 阶段的 unit_reviewer 写完整，不要全量重写）
-        2. 跨类别合并**去重 key 相等**的 issue（按 SCHEMA "去重 key 规范"：`primary_symbol` 锚 + `cwe`，回退 endpoint / 文件+行号）：选 `primary_symbol` 非空且信息最完整的为 canonical 主 issue
-           - 主 issue 补：`canonical: true`、`duplicate_files`（按 SCHEMA "合并阶段字段"）
-           - **severity 取最高**：把 canonical frontmatter 的 `severity` 更新为被合并各 issue 中的最高档（按 SCHEMA "severity 收敛" 条目）——这是合并时**唯一允许改写的原值字段**。
-           - 非 canonical 文件补：`canonical: false`、`superseded_by`、`duplicate_reason`
-           - **不删除任何文件、不移动**；**除 `severity`（上条取最高）外**其他字段保持原值
-        3. 校验 frontmatter "必填字段"（按 SCHEMA），缺则补，**不覆盖已有值**
-        4. 统计 `discovery_verdict` 桶：confirmed / escalate / refuted / blocked
-        5. 按 SCHEMA "索引文件" 模板写 `RUN_DIR/issues/index.jsonl`，每行一个 canonical issue，`adversarial_verdict` 和 `final_verdict` 留 `null`
-        6. discovery 阶段风险评分 1-10（仅基于 confirmed + escalate）
+        **不要手工读一堆 issue 逐个比对去重、也不要手算 index.jsonl** —— 去重 key、canonical 选择、
+        severity 收敛在 SCHEMA 里是**完全确定性**的，交给脚本（读 unit_reviewer 写的机读旁路
+        `work/issue-meta/*.json`，纯 JSON，不解析 LLM 手写 YAML）。跑这一条命令：
+
+        ```bash
+        python3 "{{ inputs.audit_skills_dir }}/scripts/merge_dedup.py" "{{ inputs.run_dir }}"
+        ```
+
+        脚本（确定性，无 LLM 判断）：
+        - 读所有 `work/issue-meta/*.json`，按 SCHEMA "去重 key 规范"（`primary_symbol` 锚 + `cwe`，回退 endpoint / 文件+行号；`CWE-UNKNOWN` 永不折叠）分组
+        - 每组选 canonical（primary_symbol 非空 → 信息最完整 → issue_id 稳定序），severity 取组内最高
+        - 给 canonical `.md` 标 `canonical:true`/`duplicate_files`/`severity`，非 canonical `.md` 标 `canonical:false`/`superseded_by`/`duplicate_reason`（只改这几个标量，其余原值不动，不删不移任何文件）
+        - 写 `RUN_DIR/issues/index.jsonl`（每行一个 canonical，`adversarial_verdict`/`final_verdict` 留 `null`）
+        - stdout 打印一行 JSON：`{total_issues, total_canonical, discovery_confirmed, discovery_escalate, discovery_refuted, discovery_blocked}`
 
         **不要删除任何 refuted / blocked issue 文件**——它们要进入对抗验证。
 
-        ## 任务 B：按预算排序 + 分批（只准备批次，不自己创建子 run）
+        **你唯一需要判断的**：读脚本打印的四桶计数，给出 discovery 阶段风险评分 `risk_score_discovery`（1-10，仅基于 confirmed + escalate 的数量与 severity）。其余字段原样取脚本输出。
 
-        **不要自己创建 challenger 子 run，也不要阻塞等待子 run** —— 框架会在下一步通过 parallel 内联并行执行
-        `security-audit-challenger`，你这一步只负责排序、预算截断、分批、写派发清单。
+        ## 任务 B：跑脚本做预算排序 + 分批（确定性，禁止手算）
 
-        8. 重新读 `RUN_DIR/issues/index.jsonl`，筛选 `canonical == true` 的行，记 `N = canonical_issue_count`。
-        9. 计算 `challenger_quota = max(1, ceil(N × inputs.challenger_max_ratio))`（N=0 时 quota=0）。
-           按优先级排序并截断到 quota 个：
-           - severity: CRITICAL > HIGH > MEDIUM > LOW > INFO
-           - discovery_verdict: confirmed > escalate > blocked > refuted
-           - 同级按 issue_id 稳定排序
-           **强制规则**：severity 为 CRITICAL 或 HIGH 的 issue **必须**进入复核，不受 quota 截断。
-           即：`actual_quota = max(challenger_quota, count(CRITICAL/HIGH issues))`。
-        10. 入选 issue 按每批 **5 个**分批（固定值：challenger 在单个 turn 内串行复核整批，每个 issue 需独立读代码取证，5 个约 180s/issue 预算，过大会撞 turn 时限导致整批超时）。**输出 `challenger_batches`**：一个数组，
-            每个元素是一批的 issue 文件**绝对路径数组**（array of array of string），供框架 parallel 逐批内联调用 challenger。
-            同时**必须**在 `RUN_DIR/work/challenger-dispatch.jsonl` 写派发清单（每批一行），作为后续逐 issue 对账的唯一依据：
-            `{"batch_index":0,"issue_paths":["<issue 文件绝对路径>","<issue 文件绝对路径>"]}`
-        11. 未入选的 canonical issue：
-            - 在 issue frontmatter 写入 `adversarial_verdict: skipped_quota`
-            - `final_verdict` 按 SCHEMA `skipped_quota` 行计算：`discovery_verdict != refuted` 时保持 discovery 结论；
-              若 `discovery_verdict == refuted`，必须写 `final_verdict: blocked`
-              （未经过 challenger 的 discovery-refuted 不能直接杀掉）
-            - `final_verdict_reason` 写明 `challenger_quota_reached`（含 N 与 quota，便于追溯）
-            - 在 audit-log 列出 skipped issue_id、severity、discovery_verdict、排序依据，并写明 `challenger_max_ratio` 与计算出的 quota
-            - `skipped_quota` 计数写入 output。
+        **不要自己创建 challenger 子 run、不要阻塞等待、不要手工排序/分批/在脑内或终端里拼
+        `challenger_batches` 大数组** —— 这些全是确定性计算，**必须交给脚本**（手算大数组是本阶段
+        历史上 stall 的主因）。你这一步只需运行下面这一条命令，并把它 stdout 打印的字段回填 output：
 
-        challenger 的证据规则已内置在 sub-playbook；本阶段只负责去重、排序、预算截断、分批。
+        ```bash
+        python3 "{{ inputs.audit_skills_dir }}/scripts/plan_challenger_batches.py" "{{ inputs.run_dir }}" "{{ inputs.challenger_max_ratio }}"
+        ```
+
+        脚本（确定性，读 `RUN_DIR/issues/index.jsonl` 的 canonical 行，无 LLM 判断）：
+        - 按 severity(CRITICAL>HIGH>MEDIUM>LOW>INFO) → discovery_verdict(confirmed>escalate>blocked>refuted) → issue_id 稳定排序
+        - `quota = max(1, ceil(N × ratio))`（N=0 时 0）；CRITICAL/HIGH 强制全入：`actual_quota = max(quota, count(CRIT/HIGH))`
+        - 入选按**每批 5 个**（固定值，5×~180s/issue 约 900s，challenger job `wall_clock=3600` 有余量）切成 `challenger_batches`（array of array of 绝对路径），写 `RUN_DIR/work/challenger-dispatch.jsonl`（每批一行，逐 issue 对账的唯一依据）
+        - 未入选 canonical 的 issue 文件 frontmatter 写 `adversarial_verdict: skipped_quota` + `final_verdict`（= discovery_verdict，`refuted → blocked`，未经 challenger 不能杀）+ `final_verdict_reason`，并把明细追加到 audit-log
+        - stdout 打印一行 JSON：`{total_canonical, challenger_quota, actual_quota, selected_count, skipped_quota, batch_count, challenger_batches}`
+
+        challenger 的证据规则已内置在 sub-playbook；本阶段任务 B 全部交给脚本，你不做任何排序/分批/标记。
 
         ## 回传与收尾（务必遵守）
 
-        直接用结构化 output（turn_complete）一次性填齐下面字段，`challenger_batches` **作为
-        结构化数组直接提交**——不要写脚本拼 JSON、不要把大数组 dump 到终端。
+        用结构化 output（turn_complete）一次性填齐下面字段：
+        - `total_issues` / `total_canonical` / `discovery_confirmed` / `discovery_escalate` /
+          `discovery_refuted` / `discovery_blocked` **原样取 merge_dedup.py 打印的 JSON 同名字段**
+        - `skipped_quota` / `challenger_batches` **原样取 plan_challenger_batches.py 打印的 JSON 同名字段**
+          （`challenger_batches` 作为结构化数组直接提交，**不要再 dump 到终端、不要自己重排**；`total_canonical` 两脚本应一致，取其一）
+        - `risk_score_discovery` 由你按上面四桶计数判断填写（这是本 job 唯一的判断项）
+
+        若任一脚本非零退出或 JSON 缺字段：记录 stderr、对应字段留空并终止，run 不继续。
         **调用 turn_complete 后立即结束本轮**，不要再调用任何工具、不要继续输出。
 
       output_schema:
