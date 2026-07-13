@@ -1,0 +1,19 @@
+deploy.sh
+  s_f189f9b4934c1c::t_c098f2ba5293ef 8-10,12-13,16-18,28-33,36-56,59,66,73,82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "ba640cfe0b2a8124a31c2e5cdcbbf91aa724611f",
+  "prompts": {},
+  "sessions": {
+    "s_f189f9b4934c1c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9bc81786-d3b1-4339-bdb1-92aa2363e600",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
