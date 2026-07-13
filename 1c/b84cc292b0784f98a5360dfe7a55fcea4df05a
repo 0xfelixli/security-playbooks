@@ -1,0 +1,50 @@
+security-audit-init/PLAYBOOK.md
+  s_f189f9b4934c1c::t_8fb5c7614a4534 4
+  s_f189f9b4934c1c::t_537fdbed33eacd 7
+skills/code-security/scripts/plan_challenger_batches.py
+  s_f189f9b4934c1c::t_4590e3bcb78460 1-191
+security-audit-report/PLAYBOOK.md
+  s_f189f9b4934c1c::t_f958b4425b5d42 4
+  s_f189f9b4934c1c::t_ebde0496f099a8 96-113
+  s_f189f9b4934c1c::t_5a61760b4fdad6 7
+  s_f189f9b4934c1c::t_ac8ac96678e6f7 75,77-90,94
+  s_f189f9b4934c1c::t_7791db478442d3 117-124
+  s_f189f9b4934c1c::t_a0975cba77c74d 95
+skills/code-security/scripts/merge_dedup.py
+  s_f189f9b4934c1c::t_80a3092b971f88 1-215
+security-audit/PLAYBOOK.md
+  s_f189f9b4934c1c::t_7c1cc12eba18de 4
+  s_f189f9b4934c1c::t_353b12ac71aef6 7
+skills/code-security/SCHEMA-issue.md
+  s_f189f9b4934c1c::t_6426c1d796cd8d 163
+  s_f189f9b4934c1c::t_2d2aaeb453147e 151-160
+skills/code-security/SKILL.md
+  s_f189f9b4934c1c::t_26e134b9fb2b6d 127
+  s_f189f9b4934c1c::t_720601be8f3490 128
+security-audit-unit-review/PLAYBOOK.md
+  s_f189f9b4934c1c::t_bc61f788919b3a 195-204
+  s_f189f9b4934c1c::t_1e477ba7fb9d00 4
+  s_f189f9b4934c1c::t_7388cb512c32ef 7
+security-audit-coverage/PLAYBOOK.md
+  s_f189f9b4934c1c::t_ba53e60626569a 7
+  s_f189f9b4934c1c::t_eeeaac757ac800 4
+security-audit-challenger/PLAYBOOK.md
+  s_f189f9b4934c1c::t_88e4c553c9a9bb 7
+  s_f189f9b4934c1c::t_bfb23adae15dc6 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "1cb84cc292b0784f98a5360dfe7a55fcea4df05a",
+  "prompts": {},
+  "sessions": {
+    "s_f189f9b4934c1c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9bc81786-d3b1-4339-bdb1-92aa2363e600",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
