@@ -4,7 +4,7 @@ uri: builtin://security-audit
 version: "2026.07.13"
 title: Security Audit
 summary: |
-  全仓代码安全审计 orchestrator：文件级穷举审查（三路信号播种）+ 独立 challenger 对抗复核，输出机读 findings.json 与覆盖报告。
+  全仓代码安全审计 orchestrator：文件级穷举审查（三路信号播种），输出机读 findings.json 与覆盖报告。
 attended_mode: unattended
 approval_policy: security-owner
 approval_policies:
@@ -23,11 +23,6 @@ inputs:
     required: false
     default: "~/workmate/security-audit"
     description: "审计产物根目录，与被审计仓库分离。产物落到 <artifacts_root>/<repo_slug>/<run_id>/。默认 ~/workmate/security-audit（在 Workmate 同步根内，agent 有写权限）。**任何情况下都不写进被审计仓库**——repo_path 是纯只读输入；留空即用该默认根。"
-  challenger_max_ratio:
-    type: number
-    required: false
-    default: 0.3
-    description: "对抗复核覆盖比例（0.0-1.0）。默认 0.3：抽样复核以降低长尾成本，CRITICAL/HIGH 仍强制全复核。实际复核数 = ceil(canonical_issue_count × ratio)，至少 1（canonical 非空时）。超出比例的 issue 标记为 skipped_quota 进入 audit-log。"
   scan_depth:
     type: string
     required: false
@@ -66,7 +61,6 @@ workflow:
         run_dir: "{{ artifacts.init.run_dir }}"
         audit_skills_dir: "{{ artifacts.init.audit_skills_dir }}"
         analysis_dir: "{{ artifacts.analysis.analysis_dir }}"
-        challenger_max_ratio: "{{ inputs.challenger_max_ratio }}"
         scan_depth: "{{ inputs.scan_depth }}"
 
   - done:
@@ -76,15 +70,13 @@ workflow:
         类别 {{ artifacts.entrypoints.recommended_categories }} | 预扫描（{{ artifacts.prescan.scanner_used }}）命中 {{ artifacts.prescan.prescan_hits }} | authn 兄弟端点对比 {{ artifacts.authn_sibling.authn_sibling_suspects_count }}
         文件级穷举：{{ artifacts.unit_file_results.total_units }} 组 / worklist {{ artifacts.unit_file_results.worklist_units }} 单元（新增 issue 见下方 issues/ 统计）
 
-        Discovery: confirmed {{ artifacts.merged.discovery_confirmed }} / escalate {{ artifacts.merged.discovery_escalate }} / refuted {{ artifacts.merged.discovery_refuted }} / blocked {{ artifacts.merged.discovery_blocked }} (评分 {{ artifacts.merged.risk_score_discovery }}/10)
-        Adversarial: 翻 {{ artifacts.merged.overturned_count }} | 救 {{ artifacts.merged.rescued_count }} | 人工验证 {{ artifacts.final.needs_poc_list }}
         Final: confirmed {{ artifacts.final.final_confirmed }} / escalate {{ artifacts.final.final_escalate }} / refuted {{ artifacts.final.final_refuted }} / blocked {{ artifacts.final.final_blocked }} (评分 {{ artifacts.final.risk_score_final }}/10)
 
         产物：{{ artifacts.init.run_dir }}/{findings.json(有效漏洞), refuted.json(否决留痕), run.json(元数据), vulnerabilities.csv(平铺索引), coverage.json, coverage-critic.json, audit-log.md, cumulative-issues.md, entrypoints/, analysis/, issues/, verify/(PoC 骨架), work/(中间草稿)}
 
         confirmed: jq '.findings[] | select(.status == "confirmed")' {{ artifacts.init.run_dir }}/findings.json
-        人工验证项: NEEDS_POC / challenge_failed / refutation_not_ratified 需要人工选择受控环境和验证方式后再处理；本 playbook 不自动执行 PoC。
+        人工复核项: final_verdict == blocked 的 issue 需人工选择受控环境和验证方式后再处理；本 playbook 不自动执行 PoC。
 
 ---
 
-全仓代码安全审计 orchestrator（覆盖：全仓文件级穷举审查 + 对抗复核）：调度初始化（系统理解+入口枚举）、发现+覆盖（预扫描/authn横向对比信号播种 + 全仓穷举审查+核对+补审）、报告（去重+对抗复核+汇总）三个阶段子 playbook，输出机器可读 findings.json，并在 verify/ 下补充 confirmed/escalate/NEEDS_POC/refutation_not_ratified issue 的 PoC 脚本骨架（不自动执行）。
+全仓代码安全审计 orchestrator（覆盖：全仓文件级穷举审查）：调度初始化（系统理解+入口枚举）、发现+覆盖（预扫描/authn横向对比信号播种 + 全仓穷举审查+核对+补审）、报告（去重+汇总）三个阶段子 playbook，输出机器可读 findings.json，并在 verify/ 下补充 confirmed/escalate/blocked issue 的 PoC 脚本骨架（不自动执行）。

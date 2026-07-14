@@ -87,8 +87,8 @@ Language and framework-specific code quality patterns. Use alongside security ru
 
 | Guide | Path | Key Topics |
 |-------|------|-----------|
-| **False Positive Traps** | `guides/false-positive-traps.md` | 7 种最常见的错误否决真实漏洞场景；unit_reviewer 和 challenger 开工前必读 |
-| **Baseline Calibration** | `guides/baseline-calibration.md` | 同类对标校准：用成熟参照系判误报与定 severity；有 CVE 先例的 pattern 不因"常见"降级；unit_reviewer 与 challenger 开工前必读 |
+| **False Positive Traps** | `guides/false-positive-traps.md` | 7 种最常见的错误否决真实漏洞场景；unit_reviewer 开工前必读 |
+| **Baseline Calibration** | `guides/baseline-calibration.md` | 同类对标校准：用成熟参照系判误报与定 severity；有 CVE 先例的 pattern 不因"常见"降级；unit_reviewer 开工前必读 |
 | **Go** | `guides/go.md` | Error handling, goroutine leaks, context, interface design, common gotchas |
 | **Python** | `guides/python.md` | Type hints, async/await, exception handling, common pitfalls, testing, performance |
 | **TypeScript** | `guides/typescript.md` | Type safety, generics, strict mode, async patterns, immutability, ESLint |
@@ -124,7 +124,6 @@ Language and framework-specific code quality patterns. Use alongside security ru
 - `init_run_dir.py` — 建 RUN_DIR + 标准子目录，解析 `audit_skills_dir` / `scripts_dir` 并校验 skills 布局（rules/ guides/ SCHEMA-issue.md）。用 `__file__` 自定位（skill 根 = 脚本父目录的父目录，scripts_dir = 脚本父目录），不 import 框架、不依赖 cwd。
 - `generate_worklist.py` — 按函数/文件单元生成全仓穷举审查的确定性 worklist。
 - `reconcile_coverage.py` — 覆盖核对：worklist 与 per-unit record 对账，防漏审。
-- `merge_dedup.py` — report 阶段的**确定性去重 + 建 index.jsonl**：读 unit_reviewer 写的机读旁路 `work/issue-meta/*.json`（纯 JSON，不解析 LLM 手写 YAML），按 SCHEMA 去重 key 分组、选 canonical、severity 取最高、标 `.md` frontmatter、写 `issues/index.jsonl`、打印四桶计数。把去重从 issue_merger 的 LLM turn 挪出。
-- `plan_challenger_batches.py` — report 阶段对抗复核的**预算排序 + 分批**（确定性）：读 `issues/index.jsonl` 的 canonical 行，按 severity→discovery_verdict→issue_id 排序、算 quota（CRITICAL/HIGH 强制全入）、每 5 个切批、写 `work/challenger-dispatch.jsonl`、给未入选 issue 标 `skipped_quota` frontmatter，stdout 打印 `challenger_batches` 等字段。把这段机械活挪出 issue_merger 的 LLM turn，避免手搓大数组导致 stall。
+- `merge_dedup.py` — report 阶段的**确定性去重 + 建 index.jsonl**（在 coverage_critic 的步骤 0 运行）：读 unit_reviewer 写的机读旁路 `work/issue-meta/*.json`（纯 JSON，不解析 LLM 手写 YAML），按 SCHEMA 去重 key 分组、选 canonical、severity 取最高、标 `.md` frontmatter（含 `final_verdict = discovery_verdict`，无对抗复核阶段）、写 `issues/index.jsonl`、打印四桶计数。把去重从 LLM turn 挪出，避免手算 stall。
 
 调用约定：init 阶段以 `<SKILLS>/scripts/init_run_dir.py` 运行，其输出的 `scripts_dir`（= `<SKILLS>/scripts`）沿 playbook 传给 coverage 阶段运行其余两个脚本。这些脚本是审计流水线专用，不属于"写安全代码"的通用知识；修改时注意与 playbook 的调用契约（参数、stdout JSON 字段）保持一致。

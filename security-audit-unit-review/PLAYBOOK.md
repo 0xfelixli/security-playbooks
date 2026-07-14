@@ -91,7 +91,7 @@ workflow:
 
         Read `AUDIT_SKILLS/guides/reviewer-discipline.md`，严格执行其中全部纪律（含 false-positive-traps /
         baseline-calibration 两个必读 guide、refuted 的 recall-safe 门槛、任何 verdict 都必须写盘）。
-        这是 unit-review 与 challenger 共享的审查基准，不因具体任务改变。
+        这是 unit-review 审查基准，不因具体任务改变。
 
         ## 你的角色
 
@@ -190,7 +190,7 @@ workflow:
 
         discovery 阶段写齐所有必填字段（`canonical` 固定写 `true`）。
         `source_pass` 字段填 `unit_review`，便于后续统计区分来源。
-        **不要预填**合并阶段字段（`duplicate_files`/`superseded_by` 等）和对抗复核字段。
+        **不要预填**合并阶段字段（`duplicate_files`/`superseded_by`/`final_verdict` 等，由 merge_dedup.py 写）。
 
         **同时写机读旁路 issue-meta（供 report 阶段确定性去重脚本 merge_dedup.py 读取，避免下游解析 LLM 手写 YAML）**：
         每写一条 issue `.md`，就用 apply_patch 在 `{{ inputs.run_dir }}/work/issue-meta/<issue_id>.json`

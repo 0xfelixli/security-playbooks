@@ -57,7 +57,7 @@ def main(
         for sub in ("rules", "guides")
         if not (skills_dir / sub).is_dir()
     ]
-    # SCHEMA-issue.md is hard-required by unit_reviewer / issue_merger / challenger /
+    # SCHEMA-issue.md is hard-required by unit_reviewer / coverage_critic /
     # final_reporter downstream; fail fast here instead of mid-scan/report.
     if not (skills_dir / "SCHEMA-issue.md").is_file():
         missing.append(str(skills_dir / "SCHEMA-issue.md"))

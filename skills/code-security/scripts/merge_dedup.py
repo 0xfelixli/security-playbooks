@@ -2,15 +2,17 @@
 
 Usage: python3 merge_dedup.py <RUN_DIR>
 
-This is the mechanical half of the report stage's issue_merger job (task A),
-pulled out of the LLM turn so it cannot stall. It reads machine-readable issue
+This is the deterministic dedup run at the start of the report stage's
+coverage_critic job (step 0), pulled out of the LLM turn so it cannot stall
+and so the index exists before any blind-spot analysis. It reads machine-readable issue
 metadata sidecars (JSON — written by unit_reviewer alongside each issue .md),
 NOT the LLM-authored markdown frontmatter, so parsing is unambiguous and needs
 no pyyaml (mirrors how reconcile_coverage.py reads unit-records JSON).
 
 Reads:  <RUN_DIR>/work/issue-meta/*.json   (one per issue, discovery-time fields)
 Writes: <RUN_DIR>/issues/index.jsonl        (one line per canonical issue)
-        canonical / duplicate_files / severity into canonical issue .md frontmatter
+        canonical / duplicate_files / severity / final_verdict into canonical .md
+        (no adversarial stage — final_verdict = discovery_verdict verbatim)
         canonical:false / superseded_by / duplicate_reason into non-canonical .md
 Prints: one JSON line for the calling actor to relay into its output:
         {total_issues, total_canonical, discovery_confirmed, discovery_escalate,
@@ -80,9 +82,8 @@ def _max_severity(group: list[dict], fallback: str) -> str:
 
 
 def _set_frontmatter_keys(issue_file: pathlib.Path, updates: dict[str, str]) -> None:
-    # Minimal, dependency-free YAML-frontmatter setter (same contract as
-    # plan_challenger_batches.py). Operates ONLY inside the first '---' ... '---'
-    # fence, on '^key:' scalar lines; values are passed pre-formatted.
+    # Minimal, dependency-free YAML-frontmatter setter. Operates ONLY inside the
+    # first '---' ... '---' fence, on '^key:' scalar lines; values pre-formatted.
     if not issue_file.is_file():
         return
     lines = issue_file.read_text(encoding="utf-8").splitlines()
@@ -134,12 +135,15 @@ def main() -> None:
         dup_files = [str(o.get("issue_file", "")) for o in others if o.get("issue_file")]
 
         # Mark frontmatter: canonical + non-canonical.
+        # No adversarial stage: final_verdict is discovery_verdict verbatim.
         _set_frontmatter_keys(
             pathlib.Path(str(canon["issue_file"])).expanduser(),
             {
                 "canonical": "true",
                 "severity": max_sev,
                 "duplicate_files": json.dumps(dup_files, ensure_ascii=False),
+                "final_verdict": str(canon.get("discovery_verdict") or ""),
+                "final_verdict_reason": "no_adversarial_stage",
             },
         )
         canon_path = str(canon["issue_file"])
@@ -162,10 +166,7 @@ def main() -> None:
                 "issue_file": canon_path,
                 "canonical": True,
                 "discovery_verdict": canon.get("discovery_verdict"),
-                "adversarial_verdict": None,
-                "final_verdict": None,
-                "severity_downgraded_to": None,
-                "severity_upgraded_to": None,
+                "final_verdict": canon.get("discovery_verdict"),
                 "discovery_category": canon.get("discovery_category") or [],
                 "primary_location": canon.get("primary_location", ""),
                 "primary_symbol": canon.get("primary_symbol", ""),

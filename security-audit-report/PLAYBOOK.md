@@ -1,10 +1,10 @@
 ---
 id: security-audit-report
 uri: builtin://security-audit-report
-version: "2026.07.13"
+version: "2026.07.14"
 title: Security Audit Report
 summary: |
-  安全审计报告阶段：去重 → 顺序 challenger 对抗复核 → 对账会签 → 完整性批评 → 生成 findings.json。security-audit 第三阶段子 playbook。
+  安全审计报告阶段：去重 → 完整性批评 → 生成 findings.json。security-audit 第三阶段子 playbook。
 attended_mode: unattended
 approval_policy: security-owner
 approval_policies:
@@ -12,7 +12,7 @@ approval_policies:
     normal: approve
     sensitive: approve
 limits:
-  wall_clock_seconds: 7200
+  wall_clock_seconds: 3600
 inputs:
   repo_path:
     type: string
@@ -30,11 +30,6 @@ inputs:
     type: string
     required: true
     description: "analysis/ 目录绝对路径（由 security-audit-init 产出）"
-  challenger_max_ratio:
-    type: number
-    required: false
-    default: 0.3
-    description: "对抗复核覆盖比例（0.0-1.0）。默认 0.3；CRITICAL/HIGH 仍强制全复核。"
   scan_depth:
     type: string
     required: false
@@ -43,16 +38,6 @@ inputs:
 worktree:
   enabled: false
 actors:
-  issue_merger:
-    provider: codex
-    mode: edit
-    reasoning_effort: medium
-    fs_read_paths: ["{{ inputs.audit_skills_dir }}"]
-  issue_merger_finalize:
-    provider: codex
-    mode: edit
-    reasoning_effort: medium
-    fs_read_paths: ["{{ inputs.audit_skills_dir }}"]
   coverage_critic:
     provider: claude
     mode: edit
@@ -63,184 +48,6 @@ actors:
     fs_read_paths: ["{{ inputs.audit_skills_dir }}"]
 workflow:
   - job:
-      actor: issue_merger
-      timeout: 7200
-      prompt: |
-        目标目录：{{ inputs.repo_path }}
-        工作目录（RUN_DIR）：{{ inputs.run_dir }}
-        审计 skill 目录：{{ inputs.audit_skills_dir }}
-
-        **字段、frontmatter、index.jsonl schema**：按 `{{ inputs.audit_skills_dir }}/SCHEMA-issue.md` 执行。执行前 Read 一次。
-
-        ## 任务 A：跑脚本做确定性去重 + 写 index.jsonl（禁止手工去重）
-
-        **不要手工读一堆 issue 逐个比对去重、也不要手算 index.jsonl** —— 去重 key、canonical 选择、
-        severity 收敛在 SCHEMA 里是**完全确定性**的，交给脚本（读 unit_reviewer 写的机读旁路
-        `work/issue-meta/*.json`，纯 JSON，不解析 LLM 手写 YAML）。跑这一条命令：
-
-        ```bash
-        python3 "{{ inputs.audit_skills_dir }}/scripts/merge_dedup.py" "{{ inputs.run_dir }}"
-        ```
-
-        脚本（确定性，无 LLM 判断）：
-        - 读所有 `work/issue-meta/*.json`，按 SCHEMA "去重 key 规范"（`primary_symbol` 锚 + `cwe`，回退 endpoint / 文件+行号；`CWE-UNKNOWN` 永不折叠）分组
-        - 每组选 canonical（primary_symbol 非空 → 信息最完整 → issue_id 稳定序），severity 取组内最高
-        - 给 canonical `.md` 标 `canonical:true`/`duplicate_files`/`severity`，非 canonical `.md` 标 `canonical:false`/`superseded_by`/`duplicate_reason`（只改这几个标量，其余原值不动，不删不移任何文件）
-        - 写 `RUN_DIR/issues/index.jsonl`（每行一个 canonical，`adversarial_verdict`/`final_verdict` 留 `null`）
-        - stdout 打印一行 JSON：`{total_issues, total_canonical, discovery_confirmed, discovery_escalate, discovery_refuted, discovery_blocked}`
-
-        **不要删除任何 refuted / blocked issue 文件**——它们要进入对抗验证。
-
-        **你唯一需要判断的**：读脚本打印的四桶计数，给出 discovery 阶段风险评分 `risk_score_discovery`（1-10，仅基于 confirmed + escalate 的数量与 severity）。其余字段原样取脚本输出。
-
-        ## 任务 B：跑脚本做预算排序 + 分批（确定性，禁止手算）
-
-        **不要自己创建 challenger 子 run、不要阻塞等待、不要手工排序/分批/在脑内或终端里拼
-        `challenger_batches` 大数组** —— 这些全是确定性计算，**必须交给脚本**（手算大数组是本阶段
-        历史上 stall 的主因）。你这一步只需运行下面这一条命令，并把它 stdout 打印的字段回填 output：
-
-        ```bash
-        python3 "{{ inputs.audit_skills_dir }}/scripts/plan_challenger_batches.py" "{{ inputs.run_dir }}" "{{ inputs.challenger_max_ratio }}"
-        ```
-
-        脚本（确定性，读 `RUN_DIR/issues/index.jsonl` 的 canonical 行，无 LLM 判断）：
-        - 按 severity(CRITICAL>HIGH>MEDIUM>LOW>INFO) → discovery_verdict(confirmed>escalate>blocked>refuted) → issue_id 稳定排序
-        - `quota = max(1, ceil(N × ratio))`（N=0 时 0）；CRITICAL/HIGH 强制全入：`actual_quota = max(quota, count(CRIT/HIGH))`
-        - 入选按**每批 5 个**（固定值，5×~180s/issue 约 900s，challenger job `wall_clock=3600` 有余量）切成 `challenger_batches`（array of array of 绝对路径），写 `RUN_DIR/work/challenger-dispatch.jsonl`（每批一行，逐 issue 对账的唯一依据）
-        - 未入选 canonical 的 issue 文件 frontmatter 写 `adversarial_verdict: skipped_quota` + `final_verdict`（= discovery_verdict，`refuted → blocked`，未经 challenger 不能杀）+ `final_verdict_reason`，并把明细追加到 audit-log
-        - stdout 打印一行 JSON：`{total_canonical, challenger_quota, actual_quota, selected_count, skipped_quota, batch_count, challenger_batches}`
-
-        challenger 的证据规则已内置在 sub-playbook；本阶段任务 B 全部交给脚本，你不做任何排序/分批/标记。
-
-        ## 回传与收尾（务必遵守）
-
-        用结构化 output（turn_complete）一次性填齐下面字段：
-        - `total_issues` / `total_canonical` / `discovery_confirmed` / `discovery_escalate` /
-          `discovery_refuted` / `discovery_blocked` **原样取 merge_dedup.py 打印的 JSON 同名字段**
-        - `skipped_quota` / `challenger_batches` **原样取 plan_challenger_batches.py 打印的 JSON 同名字段**
-          （`challenger_batches` 作为结构化数组直接提交，**不要再 dump 到终端、不要自己重排**；`total_canonical` 两脚本应一致，取其一）
-        - `risk_score_discovery` 由你按上面四桶计数判断填写（这是本 job 唯一的判断项）
-
-        若任一脚本非零退出或 JSON 缺字段：记录 stderr、对应字段留空并终止，run 不继续。
-        **调用 turn_complete 后立即结束本轮**，不要再调用任何工具、不要继续输出。
-
-      output_schema:
-        total_issues: number
-        discovery_confirmed: number
-        discovery_escalate: number
-        discovery_refuted: number
-        discovery_blocked: number
-        risk_score_discovery: number
-        total_canonical: number
-        skipped_quota: number
-        challenger_batches: array
-      output: merge_prep
-
-  - parallel:
-      concurrent: false
-      for_each: "{{ artifacts.merge_prep.challenger_batches }}"
-      as: challenger_batch
-      body:
-        - call:
-            playbook: security-audit-challenger
-            inputs:
-              repo_path: "{{ inputs.repo_path }}"
-              run_dir: "{{ inputs.run_dir }}"
-              audit_skills: "{{ inputs.audit_skills_dir }}"
-              issue_paths: "{{ challenger_batch }}"
-      merge:
-        on_error: collect
-
-  - job:
-      actor: issue_merger_finalize
-      timeout: 7200
-      prompt: |
-        目标目录：{{ inputs.repo_path }}
-        工作目录（RUN_DIR）：{{ inputs.run_dir }}
-        审计 skill 目录：{{ inputs.audit_skills_dir }}
-
-        **字段、frontmatter、index.jsonl schema**：按 `{{ inputs.audit_skills_dir }}/SCHEMA-issue.md` 执行。执行前 Read 一次。
-
-        challenger 对抗复核已由上一步的框架逐批顺序内联运行完毕，你无需创建或等待任何子 run。
-        以下 discovery 阶段统计由上一步产出，原样透传到本步 output：
-        - total_issues: {{ artifacts.merge_prep.total_issues }}
-        - discovery_confirmed: {{ artifacts.merge_prep.discovery_confirmed }}
-        - discovery_escalate: {{ artifacts.merge_prep.discovery_escalate }}
-        - discovery_refuted: {{ artifacts.merge_prep.discovery_refuted }}
-        - discovery_blocked: {{ artifacts.merge_prep.discovery_blocked }}
-        - risk_score_discovery: {{ artifacts.merge_prep.risk_score_discovery }}
-        - total_canonical: {{ artifacts.merge_prep.total_canonical }}
-        - skipped_quota: {{ artifacts.merge_prep.skipped_quota }}
-
-        ## 步骤 1：challenger 完整性对账（必须执行，纯按 frontmatter 对账）
-
-        若上一步没有派发任何 challenger 批次（`RUN_DIR/work/challenger-dispatch.jsonl` 不存在或为空），跳过本步骤；
-        否则读取该派发清单，对每个派发过的 `issue_path` 重新读取 frontmatter，按 SCHEMA
-        "对抗复核字段"表校验字段合法性（已派发 issue 不允许保留 `skipped_quota`；DOWNGRADED/UPGRADED
-        必须带对应 `severity_*_to`）。任一字段缺失或非法 → 回写
-        `adversarial_verdict: challenge_failed`、`final_verdict_reason: challenger_incomplete_write`，
-        `final_verdict` 按 SCHEMA `challenge_failed` 行计算。
-        这一步必须在 REFUTED 会签和重建 index 之前完成，避免 stale 结论进入最终统计。
-
-        ## 步骤 2：REFUTED 会签（独立阶段复核；"杀漏洞"必须经 challenger 提案 + report 会签）
-
-        对每条 `adversarial_verdict == REFUTED` 的 issue（此时 challenger 已写 `final_verdict: blocked` + reason `refute_proposed`），
-        你独立读代码复核该否决是否成立（同 challenger 的高门槛：读文件逐层上溯追**所有**调用路径、
-        确认防护在危险操作前生效、且检查资源归属而非只是"已登录"）：
-        - 你也认同推翻 → 回写 `refute_ratified: true`、`final_verdict: refuted`、`final_verdict_reason: refute_ratified_by_report`
-        - 你不认同或静态拿不准 → 回写 `refute_ratified: false`、保持 `final_verdict: blocked`、
-          `final_verdict_reason: refutation_not_ratified`，作为 NEEDS_POC 留待人工
-        **recall-safe 默认**：只要你没明确认同推翻，finding 一律存活（blocked），绝不杀。会签结果计入下方统计与 audit-log。
-
-        ## 步骤 3：统计
-
-        - 总复核数 `total_challenged`（已派发 issue 总数 = challenger-dispatch.jsonl 各批 issue_paths 展平去重后条数）
-        - `challenger_batches_spawned` = challenger-dispatch.jsonl 的行数（批次数）
-        - adversarial_verdict 分布: CONFIRMED / REFUTED / DOWNGRADED / UPGRADED / NEEDS_POC / skipped_quota / challenge_failed
-        - 分歧:
-          - discovery=confirmed/escalate ∧ adversarial=REFUTED ∧ 会签通过(final_verdict=refuted) → "被推翻"；会签未通过(留 blocked) → "会签救回"（计入 audit-log）
-          - discovery=refuted/blocked ∧ adversarial=CONFIRMED → "被救回"
-          - adversarial=DOWNGRADED → "severity 下调"；adversarial=UPGRADED → "severity 上调"
-          - discovery==adversarial → "一致"
-
-        ## 步骤 4：重新生成 `RUN_DIR/issues/index.jsonl`（全量重扫，不只是更新已有行）
-
-        重新扫描 `issues/` 目录下**所有** `.md` 文件的 frontmatter（含 challenger 主动补漏新增的
-        `source_pass == "challenger_supplement"` issue——它们在任务 A 生成 index 时还不存在），
-        对 `canonical == true` 的每个文件按 SCHEMA "索引文件" 格式输出一行，连同 challenger 回写的
-        `adversarial_verdict` / `final_verdict` / `severity_downgraded_to` / `severity_upgraded_to` 一起写入。
-        **必须用全量重扫覆盖整个 index.jsonl**，否则 challenger 补漏 issue 会进不了最终 findings.json。
-
-        ## 输出
-
-        把上方注入的 discovery 统计原样填入对应 output 字段，challenger 相关字段按本步统计填写。
-
-        **禁止调用 ask_owner 或发起任何需要人工回答的提问**——本 job 在 unattended 模式下运行，
-        没有人会应答；会签/对账拿不准时按上文 recall-safe 默认（保持 blocked）处理并继续。
-
-      output_schema:
-        total_issues: number
-        discovery_confirmed: number
-        discovery_escalate: number
-        discovery_refuted: number
-        discovery_blocked: number
-        risk_score_discovery: number
-        total_canonical: number
-        total_challenged: number
-        challenger_batches_spawned: number
-        skipped_quota: number
-        adv_confirmed: number
-        adv_refuted: number
-        adv_downgraded: number
-        adv_upgraded: number
-        adv_needs_poc: number
-        adv_challenge_failed: number
-        overturned_count: number
-        rescued_count: number
-        agreed_count: number
-      output: merged
-
-  - job:
       actor: coverage_critic
       timeout: 1800
       prompt: |
@@ -249,14 +56,35 @@ workflow:
         审计 skill 目录：{{ inputs.audit_skills_dir }}
         analysis 目录：{{ inputs.analysis_dir }}
 
+        **字段、frontmatter、index.jsonl schema**：按 `{{ inputs.audit_skills_dir }}/SCHEMA-issue.md` 执行。执行前 Read 一次。
+
+        ## 步骤 0：跑脚本做确定性去重 + 写 index.jsonl（本阶段唯一的 index 生成点，禁止手工去重）
+
+        后续所有盲区盘点都以 `issues/index.jsonl` 为基准盘，而它由确定性脚本生成——去重 key、canonical
+        选择、severity 收敛在 SCHEMA 里是**完全确定性**的。**不要手工比对去重、不要手算 index.jsonl**，
+        先跑这一条命令（读 unit_reviewer 写的机读旁路 `work/issue-meta/*.json`，纯 JSON）：
+
+        ```bash
+        python3 "{{ inputs.audit_skills_dir }}/scripts/merge_dedup.py" "{{ inputs.run_dir }}"
+        ```
+
+        脚本（确定性，无 LLM 判断）：
+        - 读所有 `work/issue-meta/*.json`，按 SCHEMA "去重 key 规范"（`primary_symbol` 锚 + `cwe`，回退 endpoint / 文件+行号；`CWE-UNKNOWN` 永不折叠）分组
+        - 每组选 canonical（primary_symbol 非空 → 信息最完整 → issue_id 稳定序），severity 取组内最高
+        - 给 canonical `.md` 标 `canonical:true`/`duplicate_files`/`severity`，并写 `final_verdict`（本阶段无对抗复核，`final_verdict = discovery_verdict` 原样透传）；非 canonical `.md` 标 `canonical:false`/`superseded_by`/`duplicate_reason`（只改这几个标量，其余原值不动，不删不移任何文件）
+        - 写 `RUN_DIR/issues/index.jsonl`（每行一个 canonical，`final_verdict = discovery_verdict`）
+        - stdout 打印一行 JSON：`{total_issues, total_canonical, discovery_confirmed, discovery_escalate, discovery_refuted, discovery_blocked}`
+
+        **不要删除任何 refuted / blocked issue 文件**。脚本非零退出或 JSON 缺字段 → 记录 stderr 并终止，run 不继续。
+
         ## 任务
 
-        从三个维度盘点已产出 issue 未覆盖的盲区（category × authn_level / 孤儿入口 / 未命中的高风险路径），
+        index 建好后，从三个维度盘点已产出 issue 未覆盖的盲区（category × authn_level / 孤儿入口 / 未命中的高风险路径），
         产出 gap 清单供 final_reporter 计入"未完成项"。**只批评不重跑**——不派发补审、不改 issue 文件。
 
         ## 步骤 1：读四份 evidence
 
-        1. `{{ inputs.run_dir }}/issues/index.jsonl` —— 已重建的最终 index，`canonical == true` 行即所有主 issue，
+        1. `{{ inputs.run_dir }}/issues/index.jsonl` —— 步骤 0 刚生成的最终 index，`canonical == true` 行即所有主 issue，
            带 `discovery_category`、`vuln_type`、`cwe`、`severity`、`authn_level`、`affected_entrypoints`、
            `final_verdict`、`primary_location`。**基准盘**——统计"哪些格子有 issue"。
         2. `{{ inputs.run_dir }}/coverage.json` —— 文件级覆盖率（`total_units` / `missing_count` /
@@ -381,47 +209,37 @@ workflow:
       wall_clock_seconds: 1800
       prompt: |
         工作目录：{{ inputs.run_dir }}
-        对抗验证统计：
-        - total_challenged: {{ artifacts.merged.total_challenged }}
-        - adv_confirmed: {{ artifacts.merged.adv_confirmed }}
-        - adv_refuted: {{ artifacts.merged.adv_refuted }}
-        - adv_downgraded: {{ artifacts.merged.adv_downgraded }}
-        - adv_upgraded: {{ artifacts.merged.adv_upgraded }}
-        - adv_needs_poc: {{ artifacts.merged.adv_needs_poc }}
-        - adv_challenge_failed: {{ artifacts.merged.adv_challenge_failed }}
-        - skipped_quota: {{ artifacts.merged.skipped_quota }}
-        - overturned_count: {{ artifacts.merged.overturned_count }}
-        - rescued_count: {{ artifacts.merged.rescued_count }}
-        - agreed_count: {{ artifacts.merged.agreed_count }}
         Coverage Critic 统计（宏观完整性批评）：
         - total_gaps: {{ artifacts.critic.total_gaps }}
         - plausible_gaps_count: {{ artifacts.critic.plausible_gaps_count }}
         - explained_gaps_count: {{ artifacts.critic.explained_gaps_count }}
         - coverage_passed_upstream: {{ artifacts.critic.coverage_passed_upstream }}
 
+        本 run **无对抗复核阶段**：`issues/index.jsonl` 已由上一步（coverage_critic 的步骤 0）经 merge_dedup.py
+        生成，每个 canonical issue 的 `final_verdict` 按 `discovery_verdict` 原样落定。你以 index.jsonl 为
+        source of truth 做统计与交付物生成，不改判任何 issue。discovery 四桶统计 == final 四桶统计（同一 verdict）。
+
         ## 任务
 
         1. 优先读取 `RUN_DIR/issues/index.jsonl`，按主 issue 的 `final_verdict` 字段分桶统计：
-           - confirmed（adversarial 翻案后仍成立）
+           - confirmed
            - escalate
            - refuted
-           - blocked（含 NEEDS_POC、refutation_not_ratified、challenge_failed 等人工复核项）
+           - blocked（需人工复核项）
            `issues/index.jsonl` 是 issue 的唯一 source of truth。若它缺失或字段不完整，**不得**用可能不全的
            frontmatter 扫描直接顶替统计（会漏统计 confirmed 漏洞而报告照常"完成"）——必须先遍历
-           `RUN_DIR/issues/*.md` 逐条抽取 frontmatter **重建完整的 index.jsonl**，并在 audit-log 记录"索引已重建、
-           覆盖 N 条 issue"，再基于重建后的索引统计。
+           `RUN_DIR/issues/*.md` 逐条抽取 frontmatter **重建完整的 index.jsonl**（`final_verdict = discovery_verdict`），
+           并在 audit-log 记录"索引已重建、覆盖 N 条 issue"，再基于重建后的索引统计。
         2. 给出最终风险评分（1-10，仅基于 final_verdict 为 confirmed/escalate 的 issue）
-        3. 列出所有 discovery 与 adversarial 结论不一致的 issue
-        4. 列出所有人工复核/验证项：`adversarial_verdict == NEEDS_POC`、`adversarial_verdict == challenge_failed`、
-           `refute_ratified == false` / `final_verdict_reason == refutation_not_ratified`
-        5. 读取 `RUN_DIR/coverage.json`，确认 `coverage_passed`。如果为 false，最终汇总仍写入，并在未完成项里列出未审文件单元数（`uncovered_after` / `missing_count`）。
-        5b. 读取 `RUN_DIR/coverage-critic.json`（Coverage Critic 产出）。若缺失，说明 critic 未执行、宏观盲区未覆盖——
+        3. 列出所有 `final_verdict == blocked` 的 issue（需人工复核/验证项）
+        4. 读取 `RUN_DIR/coverage.json`，确认 `coverage_passed`。如果为 false，最终汇总仍写入，并在未完成项里列出未审文件单元数（`uncovered_after` / `missing_count`）。
+        4b. 读取 `RUN_DIR/coverage-critic.json`（Coverage Critic 产出）。若缺失，说明 critic 未执行、宏观盲区未覆盖——
             **在未完成项里显式列 `coverage_critic_missing`**（不只在 audit-log 记一笔），提醒人工/下次 run 补跑。
-            把 `plausible_gaps` 逐条列入"未完成项"——它们是 unit-review + challenger 都过完之后
-            仍被判"疑似漏审"的宏观盲区，人工/下次 run 需要吸收。`explained_gaps` 不进未完成项，
-            仅在 audit-log 参考段引述数量（`Critic gaps: plausible=X / explained=Y`）。
+            把 `plausible_gaps` 逐条列入"未完成项"——它们是 unit-review 过完之后仍被判"疑似漏审"的宏观盲区，
+            人工/下次 run 需要吸收。`explained_gaps` 不进未完成项，仅在 audit-log 参考段引述数量
+            （`Critic gaps: plausible=X / explained=Y`）。
             plausible gap 不影响风险评分；但 `plausible_gaps_count > 0` 时最终评分 ≥ 3。
-        6. 在 RUN_DIR/audit-log.md 末尾追加：
+        5. 在 RUN_DIR/audit-log.md 末尾追加：
            ```
            ## 综合汇总
 
@@ -431,18 +249,12 @@ workflow:
            - 文件级覆盖率：<coverage_percent>%（未覆盖单元 <N>）
            - discovery_verdict 统计：confirmed=X / escalate=Y / refuted=Z / blocked=W
 
-           ### Adversarial 阶段
-           - challenger 复核：<总数>
-           - discovery confirmed → adversarial REFUTED：<N>（challenger 推翻）
-           - discovery refuted → adversarial CONFIRMED：<N>（challenger 救回）
-
            ### Final
-           - final_verdict 统计：confirmed=A / escalate=B / refuted=C / blocked=D
+           - final_verdict 统计：confirmed=A / escalate=B / refuted=C / blocked=D（= discovery_verdict，无对抗复核）
            - 风险评分：<1-10>
 
            ### 人工复核项
-           - discovery 与 adversarial 分歧：[...]
-           - 需人工验证/复核：NEEDS_POC / challenge_failed / refutation_not_ratified [...]
+           - 需人工验证/复核（blocked）：[...]
 
            ### Coverage Critic（宏观完整性）
            - 总 gap 数：<N>（plausible=<X>，explained=<Y>）
@@ -453,13 +265,12 @@ workflow:
            - 未覆盖文件单元：<N>（应为 0）
            - Critic plausible gaps：<X>（每条含 evidence + suggested_action，见 coverage-critic.json）
            ```
-        7. 生成机读交付文件（**唯一来源**：`issues/index.jsonl` 中 `canonical == true` 的主 issue；
+        6. 生成机读交付文件（**唯一来源**：`issues/index.jsonl` 中 `canonical == true` 的主 issue；
            **字段映射 + 排序**：按 `{{ inputs.audit_skills_dir }}/SCHEMA-issue.md` 的 "findings.json 字段映射" 小节执行）：
 
-           **7a. `RUN_DIR/findings.json`（主交付物，供 CI / dashboard / 告警消费）**——`findings[]` **只收**
+           **6a. `RUN_DIR/findings.json`（主交付物，供 CI / dashboard / 告警消费）**——`findings[]` **只收**
           `final_verdict ∈ {confirmed, escalate, blocked}` 的主 issue（要修的 + 要人工看的；**refuted 不进此数组**）。
-          每条 finding 必须按 SCHEMA 带上 `adversarial_verdict`、`final_verdict_reason`、`refute_ratified`，
-          让下游能区分已复核成立、未复核、复核失败和会签救回：
+          每条 finding 必须按 SCHEMA 带上 `final_verdict` 与 `final_verdict_reason`，让下游能区分要修与待人工复核：
            ```json
            {
              "run_id": "<RUN_ID>", "repo_path": "<绝对路径>", "generated_at": "<ISO8601>",
@@ -474,11 +285,11 @@ workflow:
            ```
            `summary` 仍给**全部四桶**完整计数（让消费方一眼知道否决/待人工各多少），仅 `findings[]` 不含 refuted。
 
-           **7b. `RUN_DIR/refuted.json`（审计留痕）**——`findings[]` **只收** `final_verdict == refuted` 的主 issue，
-           字段映射同上，并额外带 `refute_ratified` 与 `final_verdict_reason`（独立阶段会签结论）。顶层结构同 7a，
-           `summary.refuted` = 条数、其余桶填 0。refuted 的完整正文仍在 `issues/*.md`，此文件只是机读汇总。
+           **6b. `RUN_DIR/refuted.json`（审计留痕）**——`findings[]` **只收** `final_verdict == refuted` 的主 issue，
+           字段映射同上，额外带 `final_verdict_reason`。顶层结构同 6a，`summary.refuted` = 条数、其余桶填 0。
+           refuted 的完整正文仍在 `issues/*.md`，此文件只是机读汇总。
 
-           **7c. `RUN_DIR/run.json`（元数据，跟 talon `writer.py:write_run_record` 对齐）**——一次 run 的机读身份证：
+           **6c. `RUN_DIR/run.json`（元数据，跟 talon `writer.py:write_run_record` 对齐）**——一次 run 的机读身份证：
            ```json
            {
              "run_id": "<RUN_ID>",
@@ -486,32 +297,30 @@ workflow:
              "started_at": "<从 RUN_ID 前缀 YYYYMMDD-HHMMSS 解析成 ISO8601>",
              "finished_at": "<当前 ISO8601>",
              "scan_depth": "<balanced | deep>",
-             "challenger_max_ratio": <number>,
              "coverage_passed": <boolean>,
              "final": {"confirmed": <N>, "escalate": <N>, "refuted": <N>, "blocked": <N>, "risk_score": <1-10>}
            }
            ```
-           `scan_depth` / `challenger_max_ratio` 从主 playbook 注入的对应字段直接透传；`started_at` 从 RUN_ID 时间戳前缀
+           `scan_depth` 从主 playbook 注入的对应字段直接透传；`started_at` 从 RUN_ID 时间戳前缀
            反向解析（`20260709-145823` → `2026-07-09T14:58:23`）。**不含 LLM usage**（Workmate 侧另有记账，不重复）。
 
-           **7d. `RUN_DIR/vulnerabilities.csv`（平铺索引，跟 talon `writer.py` 的 5 列 CSV 对齐）**——从 `findings.json`
+           **6d. `RUN_DIR/vulnerabilities.csv`（平铺索引，跟 talon `writer.py` 的 5 列 CSV 对齐）**——从 `findings.json`
            的 `findings[]` 派生（不含 refuted），5 列表头：`id,title,severity,discovered_at,location`：
            - `id` = `issue_id`；`title` 中的逗号/引号按 RFC 4180 转义（含逗号则用 `"..."` 包裹、内部 `"` 加倍）
-           - `severity` 已是 UPGRADED/DOWNGRADED 生效后的值
+           - `severity` 为 issue 生效 severity
            - `discovered_at` 取 issue frontmatter 的 `discovery_at`
            - `location` = `file:line`（file 用相对 repo 的相对路径，去除 `repo_path` 前缀）
            按 severity DESC 排序（同 findings.json）。0 条时也写文件（只有表头）。
 
            约束：4 个文件都必须生成；0 条也写空 findings 数组 + summary 零值 / CSV 只有表头；仅由本步骤生成。
-        8. 为 `final_verdict ∈ {confirmed, escalate}`、所有 `adversarial_verdict == NEEDS_POC`
-           以及所有 `refute_ratified == false` / `final_verdict_reason == refutation_not_ratified` 的 issue，在
+        7. 为 `final_verdict ∈ {confirmed, escalate, blocked}` 的 issue，在
            `RUN_DIR/verify/` 下补充一个 PoC 脚本骨架（**只补充脚本，绝不执行验证**）：
            - 文件名：`verify/<issue_id>.poc.<ext>`（按目标技术栈选 `.py` / `.sh` / `.http` 等）
            - 内容：复现该 issue 的最小步骤骨架——目标接口、构造的恶意输入、预期 vs 实际、
              前置条件（账号 / token / 环境），以及"需人工在受控环境执行"的醒目注释
            - 脚本顶部注释引用对应 `issues/<issue_id>.md` 与其 `primary_location`
            - **不要运行脚本、不要发起任何真实请求**；本 playbook 不自动执行 PoC，只补充骨架供人工接手
-        9. **目录清扫（最后一步，保持交付目录整洁）**：把 `RUN_DIR` 根目录下不在交付白名单内的
+        8. **目录清扫（最后一步，保持交付目录整洁）**：把 `RUN_DIR` 根目录下不在交付白名单内的
            所有文件移动到 `RUN_DIR/work/`。
            - 白名单文件：`findings.json`、`refuted.json`、`run.json`、`vulnerabilities.csv`、`coverage.json`、`coverage-audit.json`、`coverage-critic.json`、`audit-log.md`、`cumulative-issues.md`
            - 白名单目录：`entrypoints/`、`analysis/`、`issues/`、`verify/`、`work/`
@@ -525,18 +334,16 @@ workflow:
         final_refuted: number
         final_blocked: number
         risk_score_final: number
-        needs_poc_list: string
         coverage_passed: boolean
       output: final
 
   - done:
       message: |
         报告阶段完成：
-        Adversarial：复核 {{ artifacts.merged.total_challenged }} / 翻 {{ artifacts.merged.overturned_count }} / 救 {{ artifacts.merged.rescued_count }}
         Critic：plausible={{ artifacts.critic.plausible_gaps_count }} / explained={{ artifacts.critic.explained_gaps_count }}
         Final：confirmed {{ artifacts.final.final_confirmed }} / escalate {{ artifacts.final.final_escalate }} / refuted {{ artifacts.final.final_refuted }} / blocked {{ artifacts.final.final_blocked }} (评分 {{ artifacts.final.risk_score_final }}/10)
         产物：{{ inputs.run_dir }}/findings.json（有效漏洞）+ refuted.json（否决留痕）+ coverage-critic.json（宏观盲区）
 
 ---
 
-安全审计报告阶段：跨类别去重 → 框架逐批顺序内联 challenger 对抗复核 → 对账+会签 → 生成 findings.json 和 PoC 骨架。security-audit 主 playbook 的第三阶段子 playbook。
+安全审计报告阶段：跨类别去重（final_verdict = discovery_verdict，无对抗复核）→ 完整性批评 → 生成 findings.json 和 PoC 骨架。security-audit 主 playbook 的第三阶段子 playbook。

@@ -18,14 +18,12 @@
 
 - **有 CVE / 被公开利用过的 pattern = 更强证据，不是"太常见所以没事"**。
   很多真实漏洞恰恰源于流行的错误写法。此时 severity **不降级**；
-  若发现影响比原假设更重，在 discovery 阶段用 `escalate`、在 challenger 阶段用
-  `UPGRADED` 上调（两个阶段都需具体代码行号证据）。
-- severity 的**源头与上调**只在 discovery（`unit_reviewer` 写 `severity` / `escalate`）
-  与 challenger（`UPGRADED`）两处发生；其余阶段不改 severity。
+  若发现影响比原假设更重，在 discovery 阶段用 `escalate` 上调（需具体代码行号证据）。
+- severity 的**源头与上调**只在 discovery（`unit_reviewer` 写 `severity` / `escalate`）发生；其余阶段不改 severity。
 
 ## 排除（不能拿 baseline 当否决真漏洞的借口）
 
-- **"业界都这么写" 不能单独作为 `refuted` / `REFUTED` 理由**——见上方，流行写法照样有 CVE。
+- **"业界都这么写" 不能单独作为 `refuted` 理由**——见上方，流行写法照样有 CVE。
   否决真漏洞必须有"该路径上存在有效防护或不可达"的具体代码行证据。
 - 参照系符合，但目标的**信任边界 / 部署模型不同**（如同一接口在目标里对公网暴露、
   参照里只在内网）→ 仍需独立判断，不能直接套用参照结论。
