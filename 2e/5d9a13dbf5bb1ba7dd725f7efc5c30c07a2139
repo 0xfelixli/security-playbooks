@@ -1,0 +1,61 @@
+skills/code-security/scripts/merge_dedup.py
+  s_55cd8e5026cec4::t_d77c054bf682a9 14-15
+  s_55cd8e5026cec4::t_a96aed8b81c4af 5-7
+  s_55cd8e5026cec4::t_2ad7d8958d233c 169
+  s_55cd8e5026cec4::t_423fccda480e75 85-86
+  s_55cd8e5026cec4::t_2631579d5e205e 138,145-146
+security-audit-report/PLAYBOOK.md
+  s_55cd8e5026cec4::t_b5e5d38128924a 4,7,15,221,225,228,231-232,234-236,238-240,242,253,257,268,271,273,288-290,292,304,307,310,316,323,349
+  s_55cd8e5026cec4::t_61810b7f3b5f9e 218-220
+  s_55cd8e5026cec4::t_de4340d6ea2c25 61,63-65,74-75,78,82,87
+  s_55cd8e5026cec4::t_81fb1ebb80f16e 51-52,57
+skills/code-security/SCHEMA-issue.md
+  s_55cd8e5026cec4::t_51a4f8c848e636 4
+  s_55cd8e5026cec4::t_8c1d3b57368f85 9
+  s_55cd8e5026cec4::t_614c5bc9159323 35
+  s_55cd8e5026cec4::t_49932aa22cc98f 50
+  s_55cd8e5026cec4::t_c309892aad8c1a 38,57-58,112,119,122,129,144,146,149,155
+  s_55cd8e5026cec4::t_77104fe20aaa42 116
+  s_55cd8e5026cec4::t_de6e751ed3700e 60
+skills/code-security/SKILL.md
+  s_55cd8e5026cec4::t_c22a2a5aec0f93 90-91
+  s_55cd8e5026cec4::t_ebaa09c878e52f 127
+security-audit/PLAYBOOK.md
+  s_55cd8e5026cec4::t_c5b9cee1bc370d 82
+  s_55cd8e5026cec4::t_a0267029565dfe 78
+  s_55cd8e5026cec4::t_9f3d29f08a51e6 7
+skills/code-security/guides/false-positive-traps.md
+  s_55cd8e5026cec4::t_553e9d15feff5c 104,106
+  s_55cd8e5026cec4::t_fa5735a606f488 113
+  s_55cd8e5026cec4::t_5d1c26ae655420 11-12
+  s_55cd8e5026cec4::t_dc764de1944685 15
+  s_55cd8e5026cec4::t_574d63c4ade40a 51
+skills/code-security/guides/reviewer-discipline.md
+  s_55cd8e5026cec4::t_0a84cba34b2539 7
+  s_55cd8e5026cec4::t_f5863a90b42b96 10
+  s_55cd8e5026cec4::t_05d5916b0ca572 16
+skills/code-security/guides/baseline-calibration.md
+  s_55cd8e5026cec4::t_c58dc3bb7b3505 26
+  s_55cd8e5026cec4::t_f68f0d5f3210b8 21-22
+skills/code-security/scripts/init_run_dir.py
+  s_55cd8e5026cec4::t_be82b5e9b6d980 60
+security-audit-unit-review/PLAYBOOK.md
+  s_55cd8e5026cec4::t_1037b6772852c4 94
+  s_55cd8e5026cec4::t_5f033f2861f216 193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "2e5d9a13dbf5bb1ba7dd725f7efc5c30c07a2139",
+  "prompts": {},
+  "sessions": {
+    "s_55cd8e5026cec4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4803190d-c8af-4ab0-b403-6387ae0796b9",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
