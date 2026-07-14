@@ -1,0 +1,53 @@
+security-audit-report/PLAYBOOK.md
+  s_05266bd1acf7af::t_4502e20b533287 255,259
+  s_05266bd1acf7af::t_b551a466bd59ff 42
+  s_05266bd1acf7af::t_de6a67df79422b 234-236
+  s_05266bd1acf7af::t_112a50773f3aa4 198
+  s_05266bd1acf7af::t_4d208faa88eb64 322
+security-audit-diff/PLAYBOOK.md
+  s_73e9b763922d78::t_dd1cec4693e328 1-524
+security-audit-init/PLAYBOOK.md
+  s_05266bd1acf7af::t_0151bc36601d64 295
+  s_05266bd1acf7af::t_9ac232bc50ca70 81
+  s_05266bd1acf7af::t_57594a0ce12255 137
+  s_05266bd1acf7af::t_5799aafc15e4e0 182,184
+security-audit-unit-review/PLAYBOOK.md
+  s_05266bd1acf7af::t_5ecf29ba848967 192
+  s_05266bd1acf7af::t_f3af21d4b3bca4 180
+  s_05266bd1acf7af::t_5f5e38cd29d0fe 188,190
+  s_05266bd1acf7af::t_65c1da9c73c74f 221
+skills/code-security/SCHEMA-issue.md
+  s_73e9b763922d78::t_d5dbfaa7e13c8f 4
+  s_73e9b763922d78::t_108d6fe3fa8989 38
+security-audit-coverage/PLAYBOOK.md
+  s_05266bd1acf7af::t_62d7b84faa9978 253
+  s_05266bd1acf7af::t_295409a9955bbc 392
+  s_05266bd1acf7af::t_f11634343dd803 88
+  s_05266bd1acf7af::t_e3d8a56199f3f4 176
+  s_05266bd1acf7af::t_9346ae183f4a52 320
+  s_05266bd1acf7af::t_df6bc6ccff1517 129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "3b5d4509cc1e1ea17a7d57e60104795532c0dc29",
+  "prompts": {},
+  "sessions": {
+    "s_05266bd1acf7af": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a26cca4c-f513-4f67-b8f4-ebe96a2de73b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    },
+    "s_73e9b763922d78": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9e81be00-8c8c-4f16-8633-e566fd1db2f2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
