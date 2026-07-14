@@ -17,8 +17,9 @@ limits:
 inputs:
   repo_path:
     type: string
-    required: true
-    description: "被审计目标 git 仓库的绝对路径（**纯只读输入**，审计不往里写任何产物）。需要完整 git 历史（shallow clone 会让 merge-base 失败——CI 里设 fetch-depth: 0）。"
+    required: false
+    default: ""
+    description: "被审计目标 git 仓库的绝对路径（**纯只读输入**，审计不往里写任何产物）。与 diff_file **二选一，至少提供其一**：默认（不给 diff_file）走 git range 模式，此时 repo_path 必填、且需要完整 git 历史（shallow clone 会让 merge-base 失败——CI 里设 fetch-depth: 0）；只给 diff_file 时可省略 repo_path（纯 diff-only 快审）。scan_depth=deep 需要源码追调用链，故 deep 必须提供 repo_path，否则自动降级为 fast。"
   artifacts_root:
     type: string
     required: false
@@ -33,7 +34,7 @@ inputs:
     type: string
     required: false
     default: ""
-    description: "直接提供 unified diff 文件的绝对路径（如已用 `git diff`/`gh pr diff` 导出）。给定时跳过 git range 解析，直接以该文件为审计输入；与 diff_base 互斥（diff_base 被忽略）。"
+    description: "直接提供 unified diff 文件的绝对路径（如已用 `git diff`/`gh pr diff` 导出）。给定时跳过 git range 解析，直接以该文件为审计输入，**此时 repo_path 可省略**；与 diff_base 互斥（diff_base 被忽略）。与 repo_path 二选一至少其一。"
   scan_depth:
     type: string
     required: false
@@ -142,8 +143,10 @@ workflow:
         **不 import 框架、不依赖 cwd、任何 python3 都能跑**；选定的 SKILLS 作 override 参数传入）：
 
         ```bash
-        python3 "<SKILLS>/scripts/init_run_dir.py" "{{ inputs.repo_path }}" "<SKILLS>" "{{ inputs.artifacts_root }}"
+        python3 "<SKILLS>/scripts/init_run_dir.py" "{% if inputs.repo_path %}{{ inputs.repo_path }}{% else %}diff-review{% endif %}" "<SKILLS>" "{{ inputs.artifacts_root }}"
         ```
+
+        （repo_path 为空即纯 diff_file 模式：上面第一个参数已用字面 `diff-review` 代替，仅用于生成 RUN_DIR 的 slug，不代表真实仓库路径。）
 
         它确定性地建 RUN_DIR + 5 子目录（entrypoints/ analysis/ issues/ verify/ work/）+
         audit-log.md / cumulative-issues.md 骨架，解析 audit_skills_dir / scripts_dir（= `<SKILLS>/scripts`），
@@ -180,6 +183,12 @@ workflow:
         ## 任务：确定审计范围，抓取 diff 文本并分类变更文件
 
         所有 git 命令都在 `{{ inputs.repo_path }}` 内**只读**执行（`git -C "{{ inputs.repo_path }}" ...`），不改工作树、不 checkout、不 fetch。产物只写进 RUN_DIR。
+
+        ## 步骤 0：输入校验（repo_path 与 diff_file 二选一至少其一）
+
+        - repo_path（`{% if inputs.repo_path %}已提供{% else %}空{% endif %}`）与 diff_file（`{% if inputs.diff_file %}已提供{% else %}空{% endif %}`）**都为空** → 无审计输入，**立即终止**：`analyzable_count` 填 0、`stop_reason` 写"未提供 repo_path 也未提供 diff_file，无审计输入"。
+        - diff_file 非空 → 走下面分支 A（不依赖 repo_path，repo_path 为空也可）。
+        - diff_file 空、repo_path 非空 → 走分支 B（git range，需在 repo 内跑 git）。
 
         {% if inputs.diff_file %}
         ### 分支 A：diff_file 已提供
@@ -255,11 +264,13 @@ workflow:
         {% if inputs.scan_depth == 'deep' %}
         ### deep 模式追加：一跳调用方（affected_files）
 
-        scan_depth=deep。对每个 analyzable 文件里被改动的函数/方法/导出符号，
+        scan_depth=deep。**仅当 repo_path 非空时可行**（纯 diff_file 模式无源码可 grep）：
+        对每个 analyzable 文件里被改动的函数/方法/导出符号，
         用 `git grep -n "<symbol>"`（在 repo 内只读）找出**直接调用它们的文件**（一跳 caller），
         去重后写入 diff-scope.json 的额外字段 `"affected_files": ["..."]`（不含 analyzable 自身）。
         这些文件不在 diff 里，但改动的 blast radius 会经它们放大，供 diff_reviewer 追调用链时读。
         找不到调用方或符号无法静态确定时，该字段填 `[]`，不阻塞。
+        repo_path 为空（纯 diff_file 且 deep）→ `affected_files` 填 `[]`，diff_reviewer 会自动降级为 fast。
         {% endif %}
 
         ## 输出
@@ -306,9 +317,10 @@ workflow:
         你在做**增量 diff 安全审计**：只对本次变更引入或修改的代码找漏洞，而不是全仓审计。
 
         {% if inputs.scan_depth == 'deep' %}
-        **deep 模式**：你有源码访问权。以 `changed.diff` 为起点，但可以 Read/grep 仓库源码，
+        **deep 模式**：{% if inputs.repo_path %}你有源码访问权。以 `changed.diff` 为起点，但可以 Read/grep 仓库源码，
         对变更函数向上追调用方（diff-scope.json 的 `affected_files` 是一跳 caller 起点）、向下追数据流到 sink，
-        确认攻击路径真实可达。目标是消除 fast 模式"看不到下游"的盲区。
+        确认攻击路径真实可达。目标是消除 fast 模式"看不到下游"的盲区。{% else %}未提供 repo_path，无源码可 Read/grep，
+        **deep 追踪不可用，自动降级为 fast**：只看 diff 文本，遵循下方 fast 纪律，并在 `summary` 注明"deep 降级：无 repo_path"。{% endif %}
         {% else %}
         **fast 模式（默认）**：你**只看 diff 文本**（`changed.diff`），这是速度换上下文的刻意权衡——
         不去 Read 仓库其余源码、不追跨文件调用链。以下纪律是本模式的灵魂：
@@ -443,6 +455,7 @@ workflow:
         ## 步骤 2：生成机读交付（唯一来源：index.jsonl 中 canonical==true 的主 issue）
 
         读 `RUN_DIR/work/diff-scope.json` 取 diff 元数据（base_ref/commit_range/analyzable/deleted 计数）。
+        下方所有 `repo_path` 字段：inputs.repo_path 非空用其绝对路径 `{{ inputs.repo_path }}`，纯 diff_file 模式（为空）时填 `"(diff_file)"`。
 
         **2a. `RUN_DIR/findings.json`（主交付物，供 CI / dashboard / 告警消费）**——`findings[]` **只收**
         `final_verdict ∈ {confirmed, escalate, blocked}` 的主 issue（要修 + 要人工看；**refuted 不进此数组**）。
