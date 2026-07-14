@@ -85,8 +85,7 @@ workflow:
 
         ### 步骤 1：grep 扫描高危模式
 
-        （命令末尾**不要加 `2>/dev/null` 或任何 stderr 重定向**——重定向会让 Workmate 的写路径
-        校验 hook 把 grep 误判成写命令并拦截。grep 的 stderr 很少，直接让它显示即可。）
+        （命令末尾不要加 `2>/dev/null` 或任何 stderr 重定向——会被写路径 hook 误判为写命令拦截。）
 
         ```bash
         cd {{ inputs.repo_path }}
@@ -127,8 +126,7 @@ workflow:
         - `prescan_hits`：写入 prescan-suspects.jsonl 的总条数
         - `scanner_used`：固定填 `grep`
 
-        **禁止调用 ask_owner 或发起任何需要人工回答的提问**——本 job 在 unattended 模式下运行，
-        没有人会应答；遇到不确定的判断自行按最合理的方案决策并继续，不要阻塞等待人工。
+        禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；不确定时自行按最合理方案决策并继续）。收到 `{"ok": true}` 后立即结束本轮，不再调用任何工具或继续输出。
       output_schema:
         prescan_hits: number
         scanner_used: string
@@ -175,8 +173,7 @@ workflow:
         ```
         若无任何偏离，写一个空文件，直接返回 `authn_sibling_suspects_count=0`。
 
-        **禁止调用 ask_owner 或发起任何需要人工回答的提问**——本 job 在 unattended 模式下运行，
-        没有人会应答；分组/归属判断有歧义时自行按最合理的方案决策并继续，不要阻塞等待人工。
+        禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；分组/归属有歧义时自行按最合理方案决策并继续）。收到 `{"ok": true}` 后立即结束本轮，不再调用任何工具或继续输出。
 
         输出 `authn_sibling_suspects_count`：写入了多少个 suspect。
       output_schema:
@@ -253,12 +250,7 @@ workflow:
 
         ## 回传与收尾（务必遵守）
 
-        直接用结构化 output（turn_complete）一次性填齐下面字段，`unit_groups` **作为结构化数组
-        直接提交**——不要写脚本拼 JSON、不要把大数组 dump 到终端（框架会退化成从超大 pane 屏幕
-        日志里 parse，极慢甚至卡死不 finalize）。**禁止调用 ask_owner 或发起任何需要人工回答的
-        提问**——本 job 在 unattended 模式下运行，没有人会应答，遇到不确定的判断自行决策并继续。
-        **调用 turn_complete 后立即结束本轮**：收到
-        `{"ok": true}` 即代表回传成功，不要再调用任何工具、不要继续输出。
+        用结构化 output（turn_complete）一次性填齐下面字段，`unit_groups` 作结构化数组直接提交——不写脚本拼 JSON、不 dump 大数组到终端。禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；不确定时自行决策并继续）。收到 `{"ok": true}` 后立即结束本轮，不再调用任何工具或继续输出（抢跑会让框架识别不到完成而挂起）。
 
       output_schema:
         total_units: number
@@ -325,10 +317,7 @@ workflow:
         - 其余统计字段以 `coverage-audit.json` 内容为准读取，不要解析脚本 stdout
         - `missing_groups`：待补审的分组列表（供框架 parallel 调度；无缺失则为空数组）
 
-        直接用结构化 output（turn_complete）填齐字段，`missing_groups` 作为结构化数组直接提交，
-        不要写脚本拼 JSON、不要把大数组 dump 到终端。**禁止调用 ask_owner 或发起任何需要人工回答
-        的提问**——本 job 在 unattended 模式下运行，没有人会应答，遇到不确定的判断自行决策并继续。
-        **调用 turn_complete 后立即结束本轮**，不要再调用任何工具、不要继续输出。
+        用结构化 output（turn_complete）填齐字段，`missing_groups` 作结构化数组直接提交——不写脚本拼 JSON、不 dump 大数组到终端。禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；不确定时自行决策并继续）。收到 `{"ok": true}` 后立即结束本轮，不再调用任何工具或继续输出。
       output_schema:
         total_units: number
         units_with_record: number
@@ -400,8 +389,7 @@ workflow:
         - `uncovered_after` = 补审后仍缺记录的单元数（= 刷新后的 `missing_count`）
         - 所有数值以刷新后的 `coverage-audit.json` 为准，不要臆造
 
-        **禁止调用 ask_owner 或发起任何需要人工回答的提问**——本 job 在 unattended 模式下运行，
-        没有人会应答；遇到不确定的判断自行按最合理的方案决策并继续，不要阻塞等待人工。
+        禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；不确定时自行按最合理方案决策并继续）。收到 `{"ok": true}` 后立即结束本轮，不再调用任何工具或继续输出。
 
       output_schema:
         uncovered_after: number

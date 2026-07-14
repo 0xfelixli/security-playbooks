@@ -1,7 +1,7 @@
 ---
 title: Issue 文件 + 索引 schema 契约
 kind: contract
-applies_to: [security-audit, security-audit-coverage, security-audit-unit-review, security-audit-report]
+applies_to: [security-audit, security-audit-coverage, security-audit-unit-review, security-audit-report, security-audit-diff]
 ---
 
 # Issue Schema 契约
@@ -35,7 +35,7 @@ applies_to: [security-audit, security-audit-coverage, security-audit-unit-review
 | `canonical` | bool | discovery 时默认 `true`，去重阶段（`merge_dedup.py`）可改 `false` |
 | `discovery_verdict` | enum | `confirmed` \| `escalate` \| `refuted` \| `blocked` |
 | `discovery_category` | array | 类别数组，如 `[authn]` 或 `[authn, business_logic]` |
-| `source_pass` | enum | 产出该 issue 的来路（下游按它过滤/归类，**必填**）：`unit_review`（发现+覆盖阶段的逐单元审查，含补审；authn 兄弟端点 / prescan suspect 转正的 issue 也统一填此值） |
+| `source_pass` | enum | 产出该 issue 的来路（下游按它过滤/归类，**必填**）：`unit_review`（全仓发现+覆盖阶段的逐单元审查，含补审；authn 兄弟端点 / prescan suspect 转正的 issue 也统一填此值）\| `diff_review`（增量 diff 审计 security-audit-diff 产出，全部填此值） |
 | `discovery_at` | string | ISO8601 timestamp |
 | `primary_location` | string | `path:line` 形式 |
 | `primary_symbol` | string | 该 location 所属的函数/方法限定名（如 `WalletService.get_balance`），读源码确定；模块级/无法确定时填 `""`。这是**去重的稳定锚**——见下方"去重 key 规范" |

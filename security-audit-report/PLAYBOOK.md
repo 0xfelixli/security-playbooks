@@ -39,7 +39,7 @@ worktree:
   enabled: false
 actors:
   coverage_critic:
-    provider: claude
+    provider: codex
     mode: edit
     fs_read_paths: ["{{ inputs.audit_skills_dir }}", "{{ inputs.analysis_dir }}"]
   final_reporter:
@@ -195,9 +195,7 @@ workflow:
 
         ## 输出
 
-        用结构化 output（turn_complete）回传字段。**禁止调用 ask_owner 或发起任何需要人工回答的
-        提问**——本 job 在 unattended 模式下运行，没有人会应答，拿不准时按上文 recall-safe 归入
-        `plausible_gap` 并继续。**调用 turn_complete 后立即结束本轮**，不要再调用任何工具。
+        用结构化 output（turn_complete）回传字段。禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；拿不准时按上文 recall-safe 归入 `plausible_gap` 并继续）。收到 `{"ok": true}` 后立即结束本轮，不再调用任何工具或继续输出。
       output_schema:
         total_gaps: number
         plausible_gaps_count: number
@@ -233,13 +231,9 @@ workflow:
            并在 audit-log 记录"索引已重建、覆盖 N 条 issue"，再基于重建后的索引统计。
         2. 给出最终风险评分（1-10，仅基于 final_verdict 为 confirmed/escalate 的 issue）
         3. 列出所有 `final_verdict == blocked` 的 issue（需人工复核/验证项）
-        4. 读取 `RUN_DIR/coverage.json`，确认 `coverage_passed`。如果为 false，最终汇总仍写入，并在未完成项里列出未审文件单元数（`uncovered_after` / `missing_count`）。
-        4b. 读取 `RUN_DIR/coverage-critic.json`（Coverage Critic 产出）。若缺失，说明 critic 未执行、宏观盲区未覆盖——
-            **在未完成项里显式列 `coverage_critic_missing`**（不只在 audit-log 记一笔），提醒人工/下次 run 补跑。
-            把 `plausible_gaps` 逐条列入"未完成项"——它们是 unit-review 过完之后仍被判"疑似漏审"的宏观盲区，
-            人工/下次 run 需要吸收。`explained_gaps` 不进未完成项，仅在 audit-log 参考段引述数量
-            （`Critic gaps: plausible=X / explained=Y`）。
-            plausible gap 不影响风险评分；但 `plausible_gaps_count > 0` 时最终评分 ≥ 3。
+        4. **读 coverage 两份产物**：
+           - `RUN_DIR/coverage.json`：确认 `coverage_passed`。若为 false，最终汇总仍写入，并在未完成项里列出未审文件单元数（`uncovered_after` / `missing_count`）。
+           - `RUN_DIR/coverage-critic.json`（Coverage Critic 产出）：若缺失，说明 critic 未执行、宏观盲区未覆盖——**在未完成项里显式列 `coverage_critic_missing`**（不只在 audit-log 记一笔），提醒人工/下次 run 补跑。把 `plausible_gaps` 逐条列入"未完成项"（unit-review 过完仍被判"疑似漏审"的宏观盲区，人工/下次 run 需吸收）；`explained_gaps` 不进未完成项，仅在 audit-log 参考段引述数量（`Critic gaps: plausible=X / explained=Y`）。plausible gap 不影响风险评分，但 `plausible_gaps_count > 0` 时最终评分 ≥ 3。
         5. 在 RUN_DIR/audit-log.md 末尾追加：
            ```
            ## 综合汇总
@@ -258,13 +252,11 @@ workflow:
            - 需人工验证/复核（blocked）：[...]
 
            ### Coverage Critic（宏观完整性）
-           - 总 gap 数：<N>（plausible=<X>，explained=<Y>）
-           - Plausible gaps（疑似漏审）：逐条列 [<dimension>] <key> — <evidence>；建议 <suggested_action>
-           - 详见 `coverage-critic.json`
+           - 总 gap 数：<N>（plausible=<X>，explained=<Y>）；逐条见上文 `## Coverage Critic` 段与 `coverage-critic.json`
 
            ### 未完成项
            - 未覆盖文件单元：<N>（应为 0）
-           - Critic plausible gaps：<X>（每条含 evidence + suggested_action，见 coverage-critic.json）
+           - Critic plausible gaps：<X>（疑似漏审，逐条含 evidence + suggested_action 见 coverage-critic.json）
            ```
         6. 生成机读交付文件（**唯一来源**：`issues/index.jsonl` 中 `canonical == true` 的主 issue；
            **字段映射 + 排序**：按 `{{ inputs.audit_skills_dir }}/SCHEMA-issue.md` 的 "findings.json 字段映射" 小节执行）：
@@ -327,8 +319,7 @@ workflow:
            - 白名单目录：`entrypoints/`、`analysis/`、`issues/`、`verify/`、`work/`
            - 其余（如 `prescan-suspects.jsonl`、`*-suspects-*.jsonl` 等中间草稿）一律 `mv` 进 `work/`，不删除
 
-        **禁止调用 ask_owner 或发起任何需要人工回答的提问**——本 job 在 unattended 模式下运行，
-        没有人会应答；汇总/评分拿不准时按上文规则自行决策并继续，不要阻塞等待人工。
+        禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；汇总/评分拿不准时按上文规则自行决策并继续）。收到 `{"ok": true}` 后立即结束本轮，不再调用任何工具或继续输出。
       output_schema:
         final_confirmed: number
         final_escalate: number

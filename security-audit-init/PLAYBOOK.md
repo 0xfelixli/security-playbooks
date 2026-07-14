@@ -78,11 +78,7 @@ workflow:
 
         ## 回传与收尾
 
-        直接用结构化 output（turn_complete）填 `bundle_skills` /
-        `synced_candidate` / `resolution` / `note` 四个字段，不要 echo/写脚本拼 JSON。
-        **禁止调用 ask_owner 或发起任何需要人工回答的提问**——本 job 在 unattended 模式下运行，
-        没有人会应答；遇到不确定的判断，自行按最合理的方案决策并继续，说明写进 `note` 字段即可。
-        调用 turn_complete 收到 `{"ok": true}` 后立即结束本轮，不要再调用任何工具、不要继续输出。
+        用结构化 output（turn_complete）填 `bundle_skills` / `synced_candidate` / `resolution` / `note` 四个字段，不要 echo/写脚本拼 JSON。禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；不确定时自行按最合理方案决策并继续，说明写进 `note`）。收到 `{"ok": true}` 后立即结束本轮，不再调用任何工具或继续输出。
       output_schema:
         bundle_skills: string
         synced_candidate: string
@@ -138,14 +134,7 @@ workflow:
 
         把脚本打印的 4 个字段原样填入 output。下游 actor 通过 `artifacts.init.*` 引用这些值。
 
-        **回传方式**：直接用结构化 output（turn_complete）填这些字段，**不要用 shell 命令
-        （`echo` / `python3 -c` 等）拼装或打印 JSON 再回传**——`audit_skills_dir` / `scripts_dir`
-        是工作区外的 bundle 路径，经 shell 回传时会被工作区文件白名单拦截，触发一次无谓的失败重试。
-        结构化 output 走 turn_complete MCP 通道，天然豁免白名单，一次成功。
-
-        **禁止调用 ask_owner 或发起任何需要人工回答的提问**——本 job 在 unattended 模式下运行，
-        没有人会应答；遇到不确定的判断（如 skills 路径歧义），按上面规则自行决策或按失败分支终止，
-        不要阻塞等待人工。
+        **回传方式**：用结构化 output（turn_complete）填这些字段，不要用 shell（`echo`/`python3 -c` 等）拼装或打印 JSON 再回传——`audit_skills_dir`/`scripts_dir` 是工作区外的 bundle 路径，经 shell 回传会被工作区文件白名单拦截、触发无谓重试；turn_complete 通道天然豁免白名单。禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；skills 路径歧义等按上面规则自行决策或按失败分支终止）。
       output_schema:
         run_id: string
         run_dir: string
@@ -190,16 +179,9 @@ workflow:
         - `category`：8 类之一（authn/replay/concurrency/business_logic/injection/data/crypto/config）
         - `assumption_at_risk`：被打破或待验证的安全假设，一句话
 
-        ## 回传方式
+        ## 回传与收尾
 
-        analysis/ 三份文档写完后，直接用结构化 output（turn_complete）一次性提交下方 5 个字段，
-        `high_risk_paths` 作为结构化数组直接提交。**禁止**写脚本拼 JSON、dump 大数组到终端、
-        复制产物到 scratch——框架从 VT100 pane 回收巨型输出会超时挂起。
-
-        **禁止调用 ask_owner 或发起任何需要人工回答的提问**——本 job 在 unattended 模式下运行，
-        没有人会应答；某项资产/边界无法从代码确认时按上文规则标 `unknown` 继续，不要阻塞等待人工。
-
-        **调用 turn_complete 收到 `{"ok": true}` 后立即结束本轮**——不要再调用任何工具、不要继续输出。
+        analysis/ 三份文档写完后，用结构化 output（turn_complete）一次性提交下方 5 个字段，`high_risk_paths` 作结构化数组直接提交——不写脚本拼 JSON、不 dump 大数组到终端。禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；资产/边界无法确认时按上文标 `unknown` 继续）。收到 `{"ok": true}` 后立即结束本轮，不再调用任何工具或继续输出（抢跑会让框架识别不到完成而挂起）。
       output_schema:
         analysis_dir: string
         auth_model_summary: string
@@ -310,12 +292,7 @@ workflow:
 
         ## 6. 回传与收尾（务必遵守）
 
-        直接用结构化 output（turn_complete）一次性填齐下面字段，数组字段作结构化数组直接提交，
-        不要写脚本拼 JSON、不要把结果 dump 到终端。**禁止调用 ask_owner 或发起任何需要人工回答的
-        提问**——本 job 在 unattended 模式下运行，没有人会应答；类别/authn_level 判断不了时按上文
-        回退规则自行决策，不要阻塞等待人工。**调用 turn_complete 后立即结束本轮**：收到
-        `{"ok": true}` 即代表回传成功，**不要再调用任何工具、不要继续输出、不要做补充验证**——
-        收尾继续动工具会与框架 turn 结束检测抢跑，偶发导致框架识别不到已完成、本 job 无限挂起。
+        用结构化 output（turn_complete）一次性填齐下面字段，数组作结构化数组直接提交——不写脚本拼 JSON、不 dump 大数组到终端。禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；类别/authn_level 判断不了时按上文回退规则自行决策）。收到 `{"ok": true}` 后立即结束本轮，不再调用任何工具或继续输出、不做补充验证（抢跑会让框架识别不到完成而挂起）。
       output_schema:
         api_summary: string
         tech_stack: string

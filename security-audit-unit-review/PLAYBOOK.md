@@ -177,7 +177,7 @@ workflow:
 
         - **confirmed**：攻击路径完整，可利用
         - **escalate**：发现比预期更严重（升级 severity 或换 vuln_type）
-        - **refuted**：有明确防护且已追踪所有调用路径——门槛极高，必须引用具体行号
+        - **refuted**：有明确防护且已追踪所有调用路径——门槛极高（三条件见 reviewer-discipline.md，须全满足、引用具体行号，否则一律 blocked）
         - **blocked**：需要运行时信息，或静态无法定论；有疑问时选此，不选 refuted
 
 
@@ -185,33 +185,11 @@ workflow:
 
         路径：`{{ inputs.run_dir }}/issues/<issue_id>.md`
 
-        **字段、frontmatter 结构、issue_id 构造规则、正文模板**：完全按 `AUDIT_SKILLS/SCHEMA-issue.md` 执行。
-        执行前先 Read 一次 SCHEMA-issue.md 确认字段名和约束。
+        **字段、frontmatter 结构、issue_id 构造规则、正文模板、cwe 取值与"同位置多漏洞"拆分规则**：完全按 `AUDIT_SKILLS/SCHEMA-issue.md` 执行——**执行前先 Read 一次**确认字段名和约束（尤其 cwe 的取值来源，以及"同一 symbol/endpoint/file:line 上存在多个独立 CWE 时必须拆成多条独立 issue、不得合成一条"的强制拆分规则——它直接决定下游 merge_dedup 去重是否正确）。
 
-        discovery 阶段写齐所有必填字段（`canonical` 固定写 `true`）。
-        `source_pass` 字段填 `unit_review`，便于后续统计区分来源。
-        **不要预填**合并阶段字段（`duplicate_files`/`superseded_by`/`final_verdict` 等，由 merge_dedup.py 写）。
+        discovery 阶段写齐所有必填字段（`canonical` 固定 `true`、`source_pass` 填 `unit_review`）；**不要预填**合并阶段字段（`duplicate_files`/`superseded_by`/`final_verdict` 等，由 merge_dedup.py 写）。
 
-        **同时写机读旁路 issue-meta（供 report 阶段确定性去重脚本 merge_dedup.py 读取，避免下游解析 LLM 手写 YAML）**：
-        每写一条 issue `.md`，就用 apply_patch 在 `{{ inputs.run_dir }}/work/issue-meta/<issue_id>.json`
-        写一份**同字段值的机读副本**（纯 JSON，值必须与 `.md` frontmatter 完全一致）：
-        ```json
-        {"issue_id":"<同 stem>","issue_file":"<该 .md 的绝对路径>","discovery_verdict":"confirmed","discovery_category":["authn"],"primary_location":"src/api/wallet.py:142","primary_symbol":"WalletService.get_balance","vuln_type":"IDOR","cwe":"CWE-639","severity":"HIGH","authn_level":"authenticated","affected_entrypoints":["http:GET:/wallet/balance"]}
-        ```
-        字段取值一律来自你刚写的 `.md` frontmatter（`affected_entrypoints`/`discovery_category` 为数组、
-        缺失填 `[]`；`primary_symbol` 无法确定填 `""`）。**这份 JSON 是 merge_dedup 去重的唯一数据源**，
-        必须每条 issue 都写、且 `issue_file` 用绝对路径。
-
-        **cwe 字段与"同位置多漏洞"拆分规则（强制，防错合并）**：
-        - `cwe` 是必填字段，格式 `"CWE-<number>"`（如 `"CWE-639"`、`"CWE-89"`）。优先从
-          `AUDIT_SKILLS/rules/*.md` 顶部 frontmatter 的 `tags` 里的 `cwe-<n>` 取值（该 rule 对应的
-          CWE 就是本 issue 的 CWE）；同一 rule 列出多个 CWE 时，选与本 issue 攻击路径最直接对应的
-          那一个（不是最上位/最宽泛的）；确实无对应规则/无法判定时填 `"CWE-UNKNOWN"`。
-        - **同一 `primary_symbol`（或同一 endpoint / 同一 file:line）若存在多个独立 CWE，必须拆成
-          多条独立 issue**——例如一个 handler 同时有 IDOR（CWE-639）+ Mass Assignment（CWE-915）
-          + SQL 注入（CWE-89），必须写 3 条 issue，各自填独立 `cwe`，**不允许合成一条**。
-          去重键含 `cwe`，同函数不同 CWE 不会被折叠；反之，若拼成一条会在下游被当成同一漏洞对待，
-          导致真漏洞被误合并、severity/修复建议错配。
+        **同时写机读旁路 issue-meta**（供 report 阶段确定性去重脚本 merge_dedup.py 读取，避免下游解析 LLM 手写 YAML）：每写一条 issue `.md`，就按 SCHEMA-issue.md「机读旁路」小节的格式，用 apply_patch 在 `{{ inputs.run_dir }}/work/issue-meta/<issue_id>.json` 写一份同字段值的纯 JSON 副本（值与刚写的 `.md` frontmatter 完全一致；数组字段缺失填 `[]`、`primary_symbol` 不定填 `""`）。**这是 merge_dedup 去重的唯一数据源，必须每条 issue 都写、`issue_file` 用绝对路径。**
 
         ## 步骤 6：为每个单元回交 proof-of-work record（强制，防偷懒）
 
@@ -240,10 +218,7 @@ workflow:
         `verdict_summary`：confirmed/escalate/refuted/blocked 各数量。
         `summary`：一句话说明审查范围，例如"穷举审查 4 个文件，23 个函数，发现 3 个 issue"。
 
-        直接用结构化 output（turn_complete）回传上述字段，不要把结果 dump 到终端。
-        **禁止调用 ask_owner 或发起任何需要人工回答的提问**——本 job 在 unattended 模式下运行，
-        没有人会应答；判不清的单元按步骤 4 的 `blocked` verdict 处理并继续，不要阻塞等待人工。
-        **调用 turn_complete 后立即结束本轮**，不要再调用任何工具、不要继续输出。
+        用结构化 output（turn_complete）回传上述字段，不要把结果 dump 到终端。禁止 ask_owner 或任何需人工应答的提问（unattended，无人应答；判不清的单元按步骤 4 的 `blocked` verdict 处理并继续）。收到 `{"ok": true}` 后立即结束本轮，不再调用任何工具或继续输出。
       output_schema:
         processed_count: number
         issue_files: string
