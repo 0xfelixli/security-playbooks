@@ -67,16 +67,15 @@ actors:
   coverage_reconciler:
     provider: codex
     mode: edit
-    reasoning_effort: medium
     fs_read_paths: ["{{ inputs.audit_skills_dir }}", "{{ inputs.scripts_dir }}"]
   coverage_finalizer:
     provider: codex
     mode: edit
-    reasoning_effort: medium
     fs_read_paths: ["{{ inputs.audit_skills_dir }}", "{{ inputs.scripts_dir }}"]
 workflow:
   - job:
       actor: static_scanner
+      wall_clock_seconds: 1800
       prompt: |
         目标目录：{{ inputs.repo_path }}
         工作目录（RUN_DIR）：{{ inputs.run_dir }}
@@ -137,6 +136,7 @@ workflow:
 
   - job:
       actor: authn_sibling_analyst
+      wall_clock_seconds: 1200
       prompt: |
         目标目录：{{ inputs.repo_path }}
         工作目录（RUN_DIR）：{{ inputs.run_dir }}
@@ -186,6 +186,7 @@ workflow:
   - job:
       actor: unit_file_analyst
       timeout: 3600
+      wall_clock_seconds: 1800
       prompt: |
         目标目录：{{ inputs.repo_path }}
         工作目录（RUN_DIR）：{{ inputs.run_dir }}
@@ -220,13 +221,13 @@ workflow:
         **审查范围与分组都由代码定，不由子 agent 自己挑。** 跑下面这一条命令：
 
         ```bash
-        python3 {{ inputs.scripts_dir }}/generate_worklist.py {{ inputs.run_dir }}
+        python3 {{ inputs.scripts_dir }}/generate_worklist.py {{ inputs.run_dir }} 12
         ```
 
         脚本读 `work/source-files.txt`，AST 枚举所有函数/方法/模块单元（非 Python 文件以一个文件级
         单元纳入），确定性地产出：
         - `work/worklist.jsonl`：全仓函数级单元 = 覆盖分母（钉死，防 agent 偷懒）
-        - `work/unit-review-groups.jsonl`：**按函数单元数均衡分好的最终分组**（贪心装箱 ~20 单元/组 +
+        - `work/unit-review-groups.jsonl`：**按函数单元数均衡分好的最终分组**（贪心装箱 ~12 单元/组 +
           目录内聚 + 入口可达文件优先；单个大文件单独成组；总单元 ≤ 目标则 1 组）——按单元数而非文件数
           分组，消除"文件大小差异导致各组负担差一个量级、大组单 turn 跑不完"的问题
         - `work/unit-review-plan.json`：分组自检摘要（source_file_count / group_count / total_units）
@@ -288,6 +289,7 @@ workflow:
   - job:
       actor: coverage_reconciler
       timeout: 3600
+      wall_clock_seconds: 600
       prompt: |
         工作目录（RUN_DIR）：{{ inputs.run_dir }}
         审计 skill 目录：{{ inputs.audit_skills_dir }}
@@ -360,6 +362,7 @@ workflow:
   - job:
       actor: coverage_finalizer
       timeout: 3600
+      wall_clock_seconds: 600
       prompt: |
         目标目录：{{ inputs.repo_path }}
         工作目录（RUN_DIR）：{{ inputs.run_dir }}

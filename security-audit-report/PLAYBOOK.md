@@ -50,6 +50,7 @@ workflow:
   - job:
       actor: coverage_critic
       timeout: 1800
+      wall_clock_seconds: 1200
       prompt: |
         目标目录：{{ inputs.repo_path }}
         工作目录（RUN_DIR）：{{ inputs.run_dir }}

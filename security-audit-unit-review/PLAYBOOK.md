@@ -12,7 +12,7 @@ approval_policies:
     normal: approve
     sensitive: approve
 limits:
-  wall_clock_seconds: 3600
+  wall_clock_seconds: 1800
 inputs:
   repo_path:
     type: string
@@ -27,7 +27,7 @@ inputs:
     required: true
     description: |
       待穷举审查的文件绝对路径列表。主流程由 generate_worklist.py 按函数单元数
-      确定性装箱分组（目录内聚，约 20 单元/组）；补审时由 coverage_reconciler
+      确定性装箱分组（目录内聚，约 12 单元/组）；补审时由 coverage_reconciler
       按缺失文件 3-5 个一组重组。均经框架 parallel 内联 call 传入。
   audit_skills:
     type: string
@@ -72,8 +72,8 @@ worktree:
 workflow:
   - job:
       actor: unit_reviewer
-      wall_clock_seconds: 3600
-      timeout: 3600
+      wall_clock_seconds: 1800
+      timeout: 1800
       prompt: |
         目标目录：{{ inputs.repo_path }}
         本次审计 RUN_DIR：{{ inputs.run_dir }}

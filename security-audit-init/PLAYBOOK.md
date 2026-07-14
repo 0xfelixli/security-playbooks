@@ -46,6 +46,7 @@ actors:
 workflow:
   - job:
       actor: skills_locator
+      wall_clock_seconds: 300
       prompt: |
         ## 任务：产出审计 skills 的候选路径（纯字符串推导，零文件访问）
 
@@ -91,6 +92,7 @@ workflow:
 
   - job:
       actor: initializer
+      wall_clock_seconds: 600
       prompt: |
         目标目录：{{ inputs.repo_path }}
         阶段 1.0 skills_locator 产出的候选：
