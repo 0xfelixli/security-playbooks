@@ -1,7 +1,7 @@
 ---
 id: security-audit-coverage
 uri: builtin://security-audit-coverage
-version: "2026.07.13"
+version: "2026.07.14"
 title: Security Audit Coverage
 summary: |
   安全审计发现阶段：预扫描/authn 信号播种 → 全仓文件级穷举审查（parallel unit-review）→ 确定性覆盖核对补审。security-audit 第二阶段子 playbook。

@@ -1,7 +1,7 @@
 ---
 id: security-audit
 uri: builtin://security-audit
-version: "2026.07.13"
+version: "2026.07.14"
 title: Security Audit
 summary: |
   全仓代码安全审计 orchestrator：文件级穷举审查（三路信号播种），输出机读 findings.json 与覆盖报告。

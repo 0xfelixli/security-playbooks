@@ -1,7 +1,7 @@
 ---
 id: security-audit-init
 uri: builtin://security-audit-init
-version: "2026.07.13"
+version: "2026.07.14"
 title: Security Audit Init
 summary: |
   安全审计初始化：定位 skills → 建 RUN_DIR → 系统理解（analysis/）→ 入口枚举分类。security-audit 第一阶段子 playbook。

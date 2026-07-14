@@ -1,7 +1,7 @@
 ---
 id: security-audit-unit-review
 uri: builtin://security-audit-unit-review
-version: "2026.07.13"
+version: "2026.07.14"
 title: Security Audit Unit Review
 summary: |
   文件级穷举安全审查：对一组文件逐函数穷举 8 类漏洞，并入三路信号作为强制关注点。security-audit 的 sub-playbook。
