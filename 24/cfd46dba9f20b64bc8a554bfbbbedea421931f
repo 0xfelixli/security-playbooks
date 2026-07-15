@@ -1,0 +1,19 @@
+security-audit-diff/PLAYBOOK.md
+  s_be7bcb656a144b::t_cc003f1a081198 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "24cfd46dba9f20b64bc8a554bfbbbedea421931f",
+  "prompts": {},
+  "sessions": {
+    "s_be7bcb656a144b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c964f53-8942-43ab-8964-ec17afd06349",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
