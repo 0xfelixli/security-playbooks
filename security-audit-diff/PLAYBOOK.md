@@ -6,6 +6,7 @@ title: Security Audit Diff
 summary: |
   Incremental (diff) code security audit: resolve the PR/commit change scope → grab the diff → review across 8 security categories → emit findings.json.
   Standalone playbook aimed at CI/PR gates, sitting alongside the full-repo security-audit orchestrator.
+  Three diff sources (priority: event_context → diff_file → repo_path): a Workmate Phabricator event automation (fires when you are author/reviewer on a revision), a pre-exported unified diff file, or a git range in a local repo.
 attended_mode: unattended
 approval_policy: security-owner
 approval_policies:
@@ -45,8 +46,25 @@ inputs:
     required: false
     default: 0.7
     description: "Confidence floor for a finding to be written (0.0–1.0). confidence measures certainty that 'the diff text itself shows a real violation', not certainty about the downstream impact radius (that belongs to severity). Below this value it is too speculative to write as an issue. Defaults to 0.7 (aligned with talon diff_review)."
+  event_context:
+    type: object
+    required: false
+    default: {}
+    description: "Sanitized event payload injected by Workmate event automations (see cobo_agents/workmate/event_context.py). When non-empty and `subject.type == differential_revision`, the diff_scoper takes the Phabricator branch: it derives the revision display_id (e.g. D123) from `subject.display_id`, resolves the latest diff_id via the `pha_diff_search` MCP tool, fetches the raw unified diff via `pha_diff_get_content`, and writes it to work/changed.diff — no repo_path / diff_file / git needed. This is the automation entry point for 'audit the PR diff when I'm author/reviewer on a Phabricator revision'; participant (author/reviewer) gating is done upstream by the Workmate gateway, not here. Since this path has no local source, scan_depth=deep auto-degrades to fast (no repo to trace call chains)."
 worktree:
   enabled: false
+mcp:
+  # Phabricator MCP server — only exercised on the event_context (branch C) path; the diff_scoper calls these
+  # read-only tools to resolve the revision's diff and pull the raw unified diff. On diff_file / repo_path paths
+  # these tools are never called, so a missing grant is a no-op (denials are call-time, not launch-time).
+  # server_id is deployment-configurable via WORKMATE_EVENT_PHABRICATOR_MCP_SERVER_ID (default "phabricator");
+  # on an event-automation run the gateway auto-grants this server via source_auth_server_id.
+  - server_id: "phabricator"
+    tools:
+      - pha_diff_get
+      - pha_diff_search
+      - pha_diff_get_content
+    purpose: "Resolve the triggering Phabricator revision and fetch its raw unified diff for the incremental security audit."
 actors:
   skills_locator:
     provider: codex
@@ -183,23 +201,51 @@ workflow:
       wall_clock_seconds: 600
       timeout: 600
       prompt: |
+        {% set pha_mode = inputs.event_context and inputs.event_context.subject and inputs.event_context.subject.type == 'differential_revision' %}
         Target directory (git repo): {{ inputs.repo_path }}
         Working directory (RUN_DIR): {{ artifacts.init.run_dir }}
         Explicit baseline diff_base: `{{ inputs.diff_base }}` (empty → auto-derive)
         Explicit diff file diff_file: `{{ inputs.diff_file }}` (non-empty → use it directly, skip git range)
+        event_context present: {% if inputs.event_context and inputs.event_context.subject %}yes (subject.type={{ inputs.event_context.subject.type }}){% else %}no{% endif %}
 
         ## Task: determine the audit scope, grab the diff text, and classify changed files
 
         All git commands run **read-only** inside `{{ inputs.repo_path }}` (`git -C "{{ inputs.repo_path }}" ...`) — do not
         modify the working tree, checkout, or fetch. Artifacts are written only into RUN_DIR.
 
-        ## Step 0: input validation (at least one of repo_path / diff_file)
+        ## Step 0: input validation and branch selection (priority: event_context → diff_file → repo_path)
 
-        - repo_path (`{% if inputs.repo_path %}provided{% else %}empty{% endif %}`) and diff_file (`{% if inputs.diff_file %}provided{% else %}empty{% endif %}`) **both empty** → no audit input, **terminate immediately**: set `analyzable_count` to 0 and `stop_reason` to "neither repo_path nor diff_file provided, no audit input".
-        - diff_file non-empty → take branch A below (does not depend on repo_path, works even if repo_path is empty).
-        - diff_file empty, repo_path non-empty → take branch B (git range, runs git inside the repo).
+        Pick exactly one input branch by this priority:
+        - **event_context** carries a Phabricator revision (`subject.type == differential_revision`) → take **branch C** (Phabricator, via MCP). Highest priority: this is the automation entry point.
+        - else **diff_file** non-empty → take **branch A** (does not depend on repo_path, works even if repo_path is empty).
+        - else **repo_path** non-empty → take **branch B** (git range, runs git inside the repo).
+        - all three empty/absent → no audit input, **terminate immediately**: set `analyzable_count` to 0 and `stop_reason` to "no audit input: none of event_context / diff_file / repo_path provided".
 
-        {% if inputs.diff_file %}
+        {% if pha_mode %}
+        ### Branch C: Phabricator revision (from event_context)
+
+        The Workmate event automation already did participant (author/reviewer) gating upstream — you do **not** re-check roles here.
+        Fetch the raw unified diff via Phabricator MCP tools (all read-only), then write it to `changed.diff`:
+
+        **Step 1: resolve the revision display_id**
+        Take `revision = "{{ inputs.event_context.subject.display_id }}"` (e.g. `D123`). If it is empty, fall back to any
+        `id`/`display_id` you can read from `inputs.event_context.trusted.owner_enrichment.revision`. If still unresolvable →
+        **terminate**: `analyzable_count=0`, `stop_reason` = "event_context has no resolvable Phabricator revision id".
+
+        **Step 2: resolve the latest diff_id** (the revision object does not carry the raw diff; get_content needs a diff_id, not the D-number)
+        Call the `pha_diff_search` MCP tool (or `pha_diff_get` on `<revision>` to obtain the revision PHID, then search diffs by
+        `revisionPHIDs`), and take the newest diff's `id` as `<diff_id>`. If no diff is found → **terminate**: `analyzable_count=0`,
+        `stop_reason` = "no diff found for Phabricator revision <revision>".
+
+        **Step 3: fetch the raw unified diff**
+        Call the `pha_diff_get_content` MCP tool with `diff_id=<diff_id>`; it returns `{ "diff_content": "diff --git ..." }` (standard
+        unified diff). Write `diff_content` verbatim to `{{ artifacts.init.run_dir }}/work/changed.diff` (do not reformat).
+        If `diff_content` is empty → **terminate**: `analyzable_count=0`, `stop_reason` = "pha_diff_get_content returned empty for diff <diff_id>".
+
+        Record `base_ref` and `merge_base` as `"(phabricator <revision>)"`. Parse the changed-file list from the diff's
+        `diff --git a/... b/...` / `+++ b/...` header lines, then jump to "## Classify changed files" below.
+        (No local source is available on this path, so scan_depth=deep auto-degrades to fast; the deep-mode addendum below is skipped.)
+        {% elif inputs.diff_file %}
         ### Branch A: diff_file provided
 
         Copy `{{ inputs.diff_file }}` directly to `{{ artifacts.init.run_dir }}/work/changed.diff` (`cp`, do not modify content).
@@ -241,12 +287,12 @@ workflow:
 
         ## Classify changed files
 
-        {% if not inputs.diff_file %}
+        {% if not inputs.diff_file and not pha_mode %}
         ```bash
         git -C "{{ inputs.repo_path }}" diff --name-status -z --find-renames --find-copies "<merge_base>...HEAD"
         ```
         {% endif %}
-        Classify by status flag (the diff_file branch parses equivalent info from the diff header):
+        Classify by status flag (the diff_file / Phabricator branches parse equivalent info from the diff header):
         - `A`/`M`/`R`/`C` (added/modified/renamed/copied) → **analyzable** (new code to audit)
         - `D` (deleted) → deleted; do not audit the code itself, but record it (a removed security control may be a regression)
 
@@ -260,9 +306,9 @@ workflow:
         Write the audit-scope metadata to `{{ artifacts.init.run_dir }}/work/diff-scope.json` (plain JSON, read by diff_reviewer / diff_reporter):
         ```json
         {
-          "base_ref": "<base_ref or (diff_file)>",
-          "merge_base": "<merge_base or (diff_file)>",
-          "commit_range": "<merge_base>...HEAD or (diff_file)",
+          "base_ref": "<base_ref, or (diff_file), or (phabricator D123)>",
+          "merge_base": "<merge_base, or (diff_file), or (phabricator D123)>",
+          "commit_range": "<merge_base>...HEAD, or (diff_file), or (phabricator D123)>",
           "changed_diff_path": "{{ artifacts.init.run_dir }}/work/changed.diff",
           "analyzable_files": ["<repo-relative path>", "..."],
           "deleted_files": ["..."],
@@ -271,10 +317,10 @@ workflow:
         }
         ```
 
-        {% if inputs.scan_depth == 'deep' %}
+        {% if inputs.scan_depth == 'deep' and not pha_mode %}
         ### deep-mode addendum: one-hop callers (affected_files)
 
-        scan_depth=deep. **Only feasible when repo_path is non-empty** (pure diff_file mode has no source to grep):
+        scan_depth=deep. **Only feasible when repo_path is non-empty** (pure diff_file / Phabricator modes have no source to grep):
         for each changed function/method/exported symbol in each analyzable file,
         use `git grep -n "<symbol>"` (read-only inside the repo) to find the **files that call them directly** (one-hop callers),
         dedupe, and write them to the extra field `"affected_files": ["..."]` in diff-scope.json (excluding the analyzable files themselves).
@@ -484,8 +530,9 @@ workflow:
         ## Step 2: generate machine-readable deliverables (sole source: primary issues with canonical==true in index.jsonl)
 
         Read `RUN_DIR/work/diff-scope.json` for diff metadata (base_ref/commit_range/analyzable/deleted counts).
-        For all `repo_path` fields below: use its absolute path `{{ inputs.repo_path }}` when inputs.repo_path is non-empty,
-        or `"(diff_file)"` in pure diff_file mode (empty).
+        For all `repo_path` fields below: use its absolute path `{{ inputs.repo_path }}` when inputs.repo_path is non-empty;
+        otherwise use the diff-scope `base_ref` label as the source identifier — `"(diff_file)"` in pure diff_file mode, or
+        `"(phabricator D123)"` when triggered by a Phabricator event automation.
 
         **2a. `RUN_DIR/findings.json` (main deliverable, consumed by CI / dashboard / alerts)** — `findings[]` **only includes**
         primary issues with `final_verdict ∈ {confirmed, escalate, blocked}` (to-fix + to-review-manually; **refuted does not enter this array**).
@@ -568,4 +615,4 @@ workflow:
 
 ---
 
-Incremental (diff) code security audit (standalone playbook, aimed at CI/PR gates): locate skill → create RUN_DIR → resolve the merge-base three-dot syntax change scope and grab the diff → review across 8 security categories (fast looks only at the diff, lowering severity but never dropping a finding when downstream is invisible; deep traces one-hop callers and call chains) → deterministic dedup to generate findings.json. Reuses security-audit's code-security skill (rules/guides/SCHEMA-issue.md) and merge_dedup.py, with artifacts aligned to the full-repo security-audit.
+Incremental (diff) code security audit (standalone playbook, aimed at CI/PR gates): locate skill → create RUN_DIR → resolve the change scope and grab the diff → review across 8 security categories (fast looks only at the diff, lowering severity but never dropping a finding when downstream is invisible; deep traces one-hop callers and call chains) → deterministic dedup to generate findings.json. The diff comes from one of three sources, by priority: (1) a Workmate Phabricator event automation — `event_context.subject.type == differential_revision` triggers branch C, which resolves the diff_id via `pha_diff_search` and pulls the raw unified diff via `pha_diff_get_content` (author/reviewer participant gating is done upstream by the gateway); (2) a pre-exported `diff_file`; (3) a `repo_path` git range (merge-base three-dot syntax). Reuses security-audit's code-security skill (rules/guides/SCHEMA-issue.md) and merge_dedup.py, with artifacts aligned to the full-repo security-audit.
