@@ -1,7 +1,7 @@
 ---
 id: security-audit-diff
 uri: builtin://security-audit-diff
-version: "2026.07.14"
+version: "2026.07.15"
 title: Security Audit Diff
 summary: |
   Incremental (diff) code security audit: resolve the PR/commit change scope → grab the diff → review across 8 security categories → emit findings.json.
