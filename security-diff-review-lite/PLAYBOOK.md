@@ -1,7 +1,7 @@
 ---
 id: security-diff-review-lite
 uri: owner://security-diff-review-lite
-version: '1.6'
+version: '1.7'
 title: Security Diff Review Lite
 summary: 'Minimal Chinese Phabricator diff security review: fetch latest diff, write a short Chinese review comment, optionally post it.'
 attended_mode: unattended
@@ -70,7 +70,7 @@ workflow:
       comment_markdown 末行追加隐藏 marker（原样）：`<!-- workmate-security-diff-review-lite diff_phid=<diff_phid> status=<status> -->`
       status ∈ {no-obvious-security-issue, security-issues-found, blocked}。
       diff 空/形如 `/workspace/...` 本地路径 → status=blocked, should_post=false。
-      should_post=true 仅当基于真实 diff 且 status=security-issues-found；status=no-obvious-security-issue → should_post=false（避免低价值刷评论）。
+      should_post=true 只要基于真实 diff 且 status ∈ {security-issues-found, no-obvious-security-issue}（无明显问题也发，明确告知"已审、未见问题"）；仅 status=blocked → should_post=false。
 
       Step 4 — 按条件回帖：
       仅当全部满足才发：post_comment=true、should_post=true、status≠blocked、revision_id 以 `D` 开头、diff_phid 非空。
