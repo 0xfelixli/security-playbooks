@@ -1,0 +1,27 @@
+security-audit-diff/PLAYBOOK.md
+  s_be7bcb656a144b::t_47f7dfbd240b96 9
+  s_be7bcb656a144b::t_d9bc8b18a74a83 56-67
+  s_be7bcb656a144b::t_98df58f52192db 618
+  s_be7bcb656a144b::t_d33beed087b59b 49-53
+  s_be7bcb656a144b::t_d5ee86732d7db4 290,295
+  s_be7bcb656a144b::t_8ff3fabbd43c2a 320,323
+  s_be7bcb656a144b::t_df8ada21e9c0c8 533-535
+  s_be7bcb656a144b::t_33fd2c5db5737e 204,209,216-228,230-233,235-248
+  s_be7bcb656a144b::t_58409a34d8a386 309-311
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "0b8e98232852e06a9922cd0a576bbecdd6aa788d",
+  "prompts": {},
+  "sessions": {
+    "s_be7bcb656a144b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c964f53-8942-43ab-8964-ec17afd06349",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
