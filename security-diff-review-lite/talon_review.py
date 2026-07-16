@@ -1,24 +1,12 @@
 #!/usr/bin/env python3
-"""Talon-only diff security review. Reads a raw unified diff, audits it with `talon --diff-file -`,
-and prints a one-line JSON result with a ready-to-post Chinese `comment_markdown`.
+"""Talon-only diff review: read a raw unified diff (stdin or --diff-file), audit with
+`talon --diff-file -`, print one-line JSON with a ready-to-post Chinese `comment_markdown`.
+No Phabricator I/O — the playbook actor fetches the diff and posts the comment.
 
-No network, no Conduit, no MCP: the Workmate playbook actor fetches the diff and posts the comment
-through its own MCP grant. This script just runs talon and formats the result.
-
-Usage (diff on stdin):
     talon_review.py --revision D118482 < changed.diff
-    talon_review.py --revision D118482 --diff-file changed.diff
 
-Env:
-  TALON_DIR       talon checkout dir. Default: /workspace/cobo-code-security-review
-  TALON_CMD       talon invocation. Default: "uv run talon"
-  TALON_TIMEOUT   talon subprocess timeout (s). Default: 3000.
-  MAX_DIFF_CHARS  cap on diff bytes piped to talon. Default: 600000.
-
-Output JSON: {revision_id, status, findings, should_post, comment_markdown}.
-  status ∈ {security-issues-found, no-obvious-security-issue, blocked}.
-  should_post is always True (the actor gates on its own post_comment input); blocked also posts
-  a "无法审查" note so every reviewed revision gets a comment.
+Env: TALON_DIR (default /workspace/cobo-code-security-review), TALON_CMD ("uv run talon"),
+TALON_TIMEOUT (3000), MAX_DIFF_CHARS (600000).
 """
 from __future__ import annotations
 
@@ -148,10 +136,23 @@ def main() -> int:
     )
     markdown = build_comment(revision_id, findings, comment_status, note, truncated)
 
+    sev_counts: dict[str, int] = {}
+    for f in findings:
+        s = (f.get("severity") or "").lower()
+        sev_counts[s] = sev_counts.get(s, 0) + 1
+    critical = [
+        (f.get("title") or "(untitled)")
+        for f in findings
+        if (f.get("severity") or "").lower() == "critical"
+    ]
+
     print(json.dumps({
         "revision_id": revision_id,
         "status": comment_status,
         "findings": len(findings),
+        "severity_counts": sev_counts,
+        "critical_count": len(critical),
+        "critical_titles": critical,
         "should_post": True,
         "comment_markdown": markdown,
     }, ensure_ascii=False))
