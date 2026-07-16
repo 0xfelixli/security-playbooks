@@ -1,0 +1,21 @@
+security-diff-review-lite/PLAYBOOK.md
+  s_1ba964794653ff::t_33c992f9c041f6 38-43,56-57,59,61,63,65,67,69,75-76,82,88-89
+security-diff-review-lite/talon_review.py
+  s_1ba964794653ff::t_6727825de40493 2-4,7-9,139-148,153-155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "74bef6078e1dbcfcf19f4ce5508b50b550dc5d8e",
+  "prompts": {},
+  "sessions": {
+    "s_1ba964794653ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e9a20f77-daa5-46ad-9be8-71aa52a81eaa",
+        "model": "unknown"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
