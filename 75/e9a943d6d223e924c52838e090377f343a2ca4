@@ -1,0 +1,19 @@
+security-diff-review-lite/talon_review.py
+  s_1ba964794653ff::t_337295323b87b4 77,79,134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "75e9a943d6d223e924c52838e090377f343a2ca4",
+  "prompts": {},
+  "sessions": {
+    "s_1ba964794653ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e9a20f77-daa5-46ad-9be8-71aa52a81eaa",
+        "model": "unknown"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
