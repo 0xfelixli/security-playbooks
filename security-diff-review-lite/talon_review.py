@@ -17,7 +17,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-MARKER_PREFIX = "workmate-security-diff-review-talon"
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 SEV_EMOJI = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🔵"}
 
@@ -75,10 +74,9 @@ def run_talon(diff_text: str) -> list[dict]:
 
 # --------------------------------------------------------------------------- markdown
 
-def build_comment(revision_id: str, findings: list[dict], status: str, note: str = "") -> str:
-    marker = f"<!-- {MARKER_PREFIX} revision={revision_id} status={status} -->"
+def build_comment(findings: list[dict], status: str, note: str = "") -> str:
     requester = os.environ.get("REVIEW_REQUESTED_BY", "defei.li@cobo.com")
-    footer = f"\n\n---\n🤖 //Automated security review requested by {requester}//\n{marker}"
+    footer = f"\n\n---\n🤖 //Automated security review requested by {requester}//"
     if status == "blocked":
         return f"⚠️ **安全 Diff Review · 未能完成**\n\n> {note}{footer}"
     if not findings:
@@ -133,7 +131,7 @@ def main() -> int:
     comment_status = "blocked" if status == "blocked" else (
         "security-issues-found" if findings else "no-obvious-security-issue"
     )
-    markdown = build_comment(revision_id, findings, comment_status, note)
+    markdown = build_comment(findings, comment_status, note)
 
     sev_counts: dict[str, int] = {}
     for f in findings:
