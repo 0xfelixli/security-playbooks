@@ -133,23 +133,10 @@ def main() -> int:
     )
     markdown = build_comment(findings, comment_status, note)
 
-    sev_counts: dict[str, int] = {}
-    for f in findings:
-        s = (f.get("severity") or "").lower()
-        sev_counts[s] = sev_counts.get(s, 0) + 1
-    critical = [
-        (f.get("title") or "(untitled)")
-        for f in findings
-        if (f.get("severity") or "").lower() == "critical"
-    ]
-
     print(json.dumps({
         "revision_id": revision_id,
         "status": comment_status,
         "findings": len(findings),
-        "severity_counts": sev_counts,
-        "critical_count": len(critical),
-        "critical_titles": critical,
         "should_post": True,
         "comment_markdown": markdown,
     }, ensure_ascii=False))
