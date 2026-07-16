@@ -43,6 +43,7 @@ workflow:
       {% set subj = inputs.event_context.get('subject', {}) if inputs.event_context else {} %}
       编排安全 diff review：MCP 取 diff → talon 脚本审计 → MCP 发评论。
       所有 Phabricator I/O 走 MCP server `000000000007`。无 ask_owner。
+      **MCP 未授权处理**：任一 MCP 调用返回未授权 / policy_denied / 需要 grant（如 "MCP grant required"）→ 立即结束，status=blocked，skipped_reason 明确写："请为 CoboWorkmate 授权 Phabricator MCP（server 000000000007）后重试"。不要重试、不要绕过。
 
       1. revision：优先 `{{ inputs.revision_id }}`，否则 event display_id `{{ subj.get('display_id', '') }}`，归一成 `D<n>`。拿不到 → 结束，status=blocked, skipped_reason="no revision id"。
 
