@@ -19,6 +19,7 @@ from pathlib import Path
 
 MARKER_PREFIX = "workmate-security-diff-review-talon"
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+SEV_EMOJI = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🔵"}
 
 
 def _argv_opt(name: str) -> str:
@@ -77,27 +78,37 @@ def run_talon(diff_text: str) -> list[dict]:
 def build_comment(revision_id: str, findings: list[dict], status: str, note: str = "") -> str:
     marker = f"<!-- {MARKER_PREFIX} revision={revision_id} status={status} -->"
     requester = os.environ.get("REVIEW_REQUESTED_BY", "defei.li@cobo.com")
-    footer = f"\n\n—\n_Automated security review requested by {requester}_\n{marker}"
+    footer = f"\n\n---\n🤖 //Automated security review requested by {requester}//\n{marker}"
     if status == "blocked":
-        return f"⚠️ 安全 diff review 未能完成：{note}{footer}"
+        return f"⚠️ **安全 Diff Review · 未能完成**\n\n> {note}{footer}"
     if not findings:
-        return f"🔒 安全 diff review（talon）：✅ 已审查，未见明显安全问题。{footer}"
+        return f"🔒 **安全 Diff Review** · talon\n\n✅ 已审查，未见明显安全问题。{footer}"
+
     findings = sorted(findings, key=lambda f: SEV_ORDER.get((f.get("severity") or "low").lower(), 9))
-    lines = [f"🔒 安全 diff review（talon）：发现 {len(findings)} 个问题\n"]
+    counts: dict[str, int] = {}
     for f in findings:
-        sev = (f.get("severity") or "").upper()
+        s = (f.get("severity") or "low").lower()
+        counts[s] = counts.get(s, 0) + 1
+    tally = " · ".join(
+        f"{SEV_EMOJI.get(s, '⚪')} {counts[s]} {s}" for s in ("critical", "high", "medium", "low") if counts.get(s)
+    )
+    lines = [f"🔒 **安全 Diff Review** · talon", "", f"发现 **{len(findings)}** 个问题：{tally}", ""]
+    for f in findings:
+        sev = (f.get("severity") or "low").lower()
+        emoji = SEV_EMOJI.get(sev, "⚪")
         title = f.get("title") or "(untitled)"
-        cwe = f" · {f.get('cwe')}" if f.get("cwe") else ""
+        meta = []
         locs = f.get("code_locations") or []
-        loc = ""
         if locs:
-            first = locs[0]
-            loc = f" · `{first.get('file','?')}:{first.get('start_line','?')}`"
-        lines.append(f"**[{sev}] {title}**{cwe}{loc}")
+            meta.append(f"`{locs[0].get('file', '?')}:{locs[0].get('start_line', '?')}`")
+        if f.get("cwe"):
+            meta.append(str(f["cwe"]))
+        meta_str = (" · " + " · ".join(meta)) if meta else ""
+        lines.append(f"{emoji} **{sev.upper()} · {title}**{meta_str}")
         if f.get("description"):
-            lines.append(str(f["description"]).strip())
+            lines.append(f"> {str(f['description']).strip()}")
         if f.get("remediation_steps"):
-            lines.append(f"_修复_：{str(f['remediation_steps']).strip()}")
+            lines.append(f"**修复**：{str(f['remediation_steps']).strip()}")
         lines.append("")
     return "\n".join(lines).rstrip() + footer
 
