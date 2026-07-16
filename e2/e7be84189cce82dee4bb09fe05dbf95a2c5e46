@@ -1,0 +1,23 @@
+.gitignore
+  s_1ba964794653ff::t_cc35562b6647a6 7-11
+security-diff-review-lite/PLAYBOOK.md
+  s_1ba964794653ff::t_a6a978361e8074 6,24,28,30-38,51,53,55,57-58,60-65,67,69-73,75,94-100
+security-diff-review-lite/talon_review.py
+  s_1ba964794653ff::t_d34c590454f49e 2-21,33,36-42,45,47-57,60,66,73,76,79-84,130-131,133-134,138-139,142,155-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "e2e7be84189cce82dee4bb09fe05dbf95a2c5e46",
+  "prompts": {},
+  "sessions": {
+    "s_1ba964794653ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e9a20f77-daa5-46ad-9be8-71aa52a81eaa",
+        "model": "unknown"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
