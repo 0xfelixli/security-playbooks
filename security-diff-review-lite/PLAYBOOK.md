@@ -3,7 +3,7 @@ id: security-diff-review-lite
 uri: owner://security-diff-review-lite
 version: '2026.07.16'
 title: Security Diff Review Lite
-summary: 'Thin launcher: resolve the Phabricator revision, then run diff_review_talon_comment.py which fetches the diff, audits it with talon --diff-file -, and posts the result as a comment.'
+summary: 'Actor fetches the revision diff via MCP, runs talon_review.py (talon diff-only audit), and posts the result as a comment via MCP.'
 attended_mode: unattended
 approval_policy: auto-normal
 inputs:
@@ -21,12 +21,21 @@ inputs:
     type: boolean
     required: false
     default: true
-    description: Passed to the script as POST_COMMENT (1/0). When false the script prints the comment but does not post.
+    description: When true, post the talon review result back to the revision. When false, only produce it.
   max_diff_chars:
     type: number
     required: false
-    default: 60000
+    default: 600000
     description: Passed to the script as MAX_DIFF_CHARS — cap on diff bytes piped to talon.
+mcp:
+  # All Phabricator I/O is done by the actor through its MCP grant (direct Conduit is blocked on the pod).
+  # The bundled talon_review.py does NOT touch the network — it only runs talon on the diff text.
+  - server_id: "000000000007"
+    tools:
+      - pha_diff_get
+      - pha_diff_get_content
+      - pha_diff_add_comment
+    purpose: "Resolve the latest diff id, fetch the raw unified diff, and post the talon security review comment."
 actors:
   runner:
     provider: codex
@@ -39,24 +48,31 @@ workflow:
     timeout: 3600
     prompt: |
       {% set subj = inputs.event_context.get('subject', {}) if inputs.event_context else {} %}
-      解析 revision_id，然后运行安全 diff review 脚本。脚本自身完成：抓最新 diff → `talon --diff-file -` 审计 → 通过 Conduit 发评论。你只是启动器：定位并运行脚本、把它的 JSON 输出原样带回。不要自己审 diff、不要调 MCP、不要自己发评论。
+      你负责编排：用 MCP 取 diff → 运行 talon 脚本审计 → 用 MCP 发评论。全部 Phabricator I/O 走 MCP server `000000000007`（pod 上直连 Conduit 不通）。talon 脚本不联网，只审 diff。
 
-      Step 1 — 解析 revision_id（不读本地文件/不猜）：
+      Step 1 — 解析 revision_id：
       优先 `{{ inputs.revision_id }}`（非空且非模板字面量）；否则用 event display_id `{{ subj.get('display_id', '') }}`。
-      纯数字如 `118556` 归一为 `D118556`；已 `D` 开头保留。
-      若拿不到以 `D` 开头的合法 id → 直接结束：posted=false, skipped_reason="no resolvable revision id", 不运行脚本。
+      纯数字归一为 `D<n>`；已 `D` 开头保留。拿不到合法 `D<n>` → 结束：posted=false, status=blocked, skipped_reason="no resolvable revision id"，不继续。
 
-      Step 2 — 定位脚本：
-      运行 `printenv WORKMATE_FS_READ_ALLOWLIST`（`:` 分隔的绝对路径），取最后一段为 `security-diff-review-lite` 的条目 P；SCRIPT=`P/diff_review_talon_comment.py`。
-      若从 allowlist 找不到，兜底用固定部署路径 `/workspace/workmate/.workmate/playbooks/security-diff-review-lite/diff_review_talon_comment.py`。两者都不存在 → posted=false, error 说明。
+      Step 2 — 取最新 diff id（MCP）：
+      调 `pha_diff_get`（server `000000000007`，revision_id=解析出的 D 号）。从返回的 `revision.all_diffs[]` 里取 `phid == revision.fields.diffPHID` 那条的 `id`；找不到就取 `all_diffs[0].id`（newest-first）。拿不到 → status=blocked, error 说明，跳到 Step 6 发 blocked 评论。
 
-      Step 3 — 运行脚本（pod 环境已含 PHA_API_TOKEN / PHA_API_URL / TALON 相关配置）：
+      Step 3 — 取 raw diff（MCP）：
+      调 `pha_diff_get_content`（diff_id=上一步的数字 id），取返回的 `diff_content`。空 → status=blocked。
+
+      Step 4 — 定位并运行 talon 脚本：
+      `printenv WORKMATE_FS_READ_ALLOWLIST`，取最后一段为 `security-diff-review-lite` 的条目 P；SCRIPT=`P/talon_review.py`；allowlist 找不到则兜底 `/workspace/workmate/.workmate/playbooks/security-diff-review-lite/talon_review.py`。
+      把 raw diff 写入一个临时文件（如 `/tmp/diff_<revision>.diff`），运行：
       ```bash
-      POST_COMMENT={% if inputs.post_comment %}1{% else %}0{% endif %} MAX_DIFF_CHARS={{ inputs.max_diff_chars }} python3 "$SCRIPT" "<解析出的 revision_id>"
+      MAX_DIFF_CHARS={{ inputs.max_diff_chars }} python3 "$SCRIPT" --revision <D号> --diff-file <临时文件>
       ```
-      脚本向 stdout 打印一行 JSON：`{revision_id, status, findings, posted, skipped_reason}`。发帖由脚本完成，你不要重复发。
+      脚本向 stdout 打印一行 JSON：`{revision_id, status, findings, should_post, comment_markdown}`。解析它。脚本非零退出/无 JSON → status=blocked, error 记 stderr 末尾。
 
-      Step 4 — 解析脚本最后一行 JSON 填入 output。脚本非零退出或无 JSON → 填 error（附 stderr 末尾片段）。
+      Step 5 — 发评论（MCP，仅当 `{{ inputs.post_comment }}` 为 true 且 should_post 为 true）：
+      调 `pha_diff_add_comment`（revision_id=D号, comment=脚本给的 `comment_markdown`, action=`comment`）。绝不 accept/reject。成功→posted=true；失败→posted=false, skipped_reason=错误。
+      post_comment=false → 不发，skipped_reason="post_comment=false"。
+
+      Step 6 — blocked 兜底：若前面 status=blocked，comment_markdown 用一句「⚠️ 安全 diff review 未能完成：<原因>」；仍按 Step 5 规则（post_comment=true 时）发出去。
 
       结构化输出返回，无 ask_owner。收到 `{"ok": true}` 后立即结束。
     output_schema:
@@ -75,10 +91,10 @@ workflow:
 
 # Security Diff Review Lite
 
-Thin launcher playbook. A single `runner` actor resolves the revision id (from event_context / revision_id),
-locates the bundled `diff_review_talon_comment.py` (shipped in this playbook dir, found via
-WORKMATE_FS_READ_ALLOWLIST), and runs it. The script does all the real work — fetch the latest diff via
-Conduit, audit it with `talon --diff-file -`, and post the audit as a comment on the revision — so the
-playbook itself holds no review logic and needs no MCP grant (the script talks to Conduit directly using
-the pod's PHA_API_TOKEN). Participant gating (subscriber/reviewer/author) is done upstream by the Workmate
-gateway source_filter.
+A single `runner` actor orchestrates the review. Because direct Conduit is blocked on the pod, ALL
+Phabricator I/O goes through the actor's MCP grant (server 000000000007): it resolves the latest diff
+id via `pha_diff_get`, fetches the raw unified diff via `pha_diff_get_content`, runs the bundled
+`talon_review.py` (talon `--diff-file -`, network-free — just the audit + Chinese comment markdown),
+then posts the result via `pha_diff_add_comment`. Participant gating (subscriber/reviewer/author) is
+done upstream by the Workmate gateway source_filter. Speed comes from talon doing the review out of the
+actor's context rather than the actor reasoning over the whole diff itself.
