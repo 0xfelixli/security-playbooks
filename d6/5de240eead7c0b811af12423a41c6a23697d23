@@ -1,0 +1,19 @@
+talon-diff/PLAYBOOK.md
+  s_1ba964794653ff::t_b54d8f88da36d5 2-3,5-6,58-66,85,89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "d65de240eead7c0b811af12423a41c6a23697d23",
+  "prompts": {},
+  "sessions": {
+    "s_1ba964794653ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e9a20f77-daa5-46ad-9be8-71aa52a81eaa",
+        "model": "unknown"
+      },
+      "human_author": "Felix <0xfelixli@gmail.com>"
+    }
+  }
+}
