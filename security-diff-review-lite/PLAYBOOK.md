@@ -22,11 +22,6 @@ inputs:
     required: false
     default: true
     description: When true, post the talon review result back to the revision. When false, only produce it.
-  max_diff_chars:
-    type: number
-    required: false
-    default: 600000
-    description: Passed to the script as MAX_DIFF_CHARS — cap on diff bytes piped to talon.
 mcp:
   # All Phabricator I/O is done by the actor through its MCP grant (direct Conduit is blocked on the pod).
   # The bundled talon_review.py does NOT touch the network — it only runs talon on the diff text.
@@ -61,7 +56,7 @@ workflow:
       2. 取 diff：`pha_diff_get(revision_id=D号)` → 从 `revision.all_diffs[]` 取 `phid==revision.fields.diffPHID` 那条的 `id`（找不到取 `all_diffs[0].id`）→ `pha_diff_get_content(diff_id)` 拿 `diff_content`。任一步失败/空 → status=blocked。留着 `revision.fields`（authorPHID/uri）备用。
 
       3. 跑脚本（命令里一律用**字面绝对路径**，禁用 `$VAR` 展开——静态校验会拦带变量的命令）：把 diff_content 写到字面临时文件（如 `/tmp/talon_diff.diff`），跑
-      `MAX_DIFF_CHARS={{ inputs.max_diff_chars }} python3 /workspace/workmate/.workmate/playbooks/security-diff-review-lite/talon_review.py --revision D号 --diff-file /tmp/talon_diff.diff`，
+      `python3 /workspace/workmate/.workmate/playbooks/security-diff-review-lite/talon_review.py --revision D号 --diff-file /tmp/talon_diff.diff`，
       解析 stdout 最后一行 JSON。非零退出/无 JSON → status=blocked。
 
       4. 发评论：`{{ inputs.post_comment }}` 且 should_post 时 `pha_diff_add_comment(revision_id, comment=comment_markdown, action="comment")`（绝不 accept/reject）。post_comment=false 则不发。blocked 时 comment_markdown 用脚本给的"未能完成"文案，同样按此规则发。

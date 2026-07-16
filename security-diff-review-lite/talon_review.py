@@ -6,7 +6,7 @@ No Phabricator I/O — the playbook actor fetches the diff and posts the comment
     talon_review.py --revision D118482 < changed.diff
 
 Env: TALON_CMD (default "talon" on PATH; set "uv run talon" for a checkout), TALON_DIR (optional
-cwd for a checkout install), TALON_TIMEOUT (3000), MAX_DIFF_CHARS (600000).
+cwd for a checkout install), TALON_TIMEOUT (3000). The full diff is passed to talon — never truncated.
 """
 from __future__ import annotations
 
@@ -31,19 +31,6 @@ def _argv_opt(name: str) -> str:
 
 
 # --------------------------------------------------------------------------- talon
-
-def truncate_diff(text: str, max_chars: int) -> tuple[str, bool]:
-    """Clip to <= max_chars at a file boundary (`\\ndiff --git `), else a newline — never mid-line."""
-    if len(text) <= max_chars:
-        return text, False
-    head = text[:max_chars]
-    cut = head.rfind("\ndiff --git ")
-    if cut <= 0:
-        cut = head.rfind("\n")
-    if cut <= 0:
-        cut = max_chars
-    return text[:cut], True
-
 
 def run_talon(diff_text: str) -> list[dict]:
     """Pipe the diff into `talon --diff-file - -n`, return the findings list."""
@@ -87,15 +74,16 @@ def run_talon(diff_text: str) -> list[dict]:
 
 # --------------------------------------------------------------------------- markdown
 
-def build_comment(revision_id: str, findings: list[dict], status: str, note: str = "", truncated: bool = False) -> str:
+def build_comment(revision_id: str, findings: list[dict], status: str, note: str = "") -> str:
     marker = f"<!-- {MARKER_PREFIX} revision={revision_id} status={status} -->"
-    trunc_note = "\n\n> ⚠️ diff 超长已截断，尾部未审查。" if truncated else ""
+    requester = os.environ.get("REVIEW_REQUESTED_BY", "defei.li@cobo.com")
+    footer = f"\n\n—\n_Automated security review requested by {requester}_\n{marker}"
     if status == "blocked":
-        return f"⚠️ 安全 diff review 未能完成：{note}\n\n{marker}"
+        return f"⚠️ 安全 diff review 未能完成：{note}{footer}"
     if not findings:
-        return f"🔒 安全 diff review（talon）：✅ 已审查，未见明显安全问题。{trunc_note}\n\n{marker}"
+        return f"🔒 安全 diff review（talon）：✅ 已审查，未见明显安全问题。{footer}"
     findings = sorted(findings, key=lambda f: SEV_ORDER.get((f.get("severity") or "low").lower(), 9))
-    lines = [f"🔒 安全 diff review（talon）：发现 {len(findings)} 个问题{trunc_note}\n"]
+    lines = [f"🔒 安全 diff review（talon）：发现 {len(findings)} 个问题\n"]
     for f in findings:
         sev = (f.get("severity") or "").upper()
         title = f.get("title") or "(untitled)"
@@ -111,33 +99,30 @@ def build_comment(revision_id: str, findings: list[dict], status: str, note: str
         if f.get("remediation_steps"):
             lines.append(f"_修复_：{str(f['remediation_steps']).strip()}")
         lines.append("")
-    lines.append(marker)
-    return "\n".join(lines)
+    return "\n".join(lines).rstrip() + footer
 
 
 # --------------------------------------------------------------------------- main
 
 def main() -> int:
     revision_id = _argv_opt("--revision") or "D?"
-    max_chars = int(os.environ.get("MAX_DIFF_CHARS", "600000"))
 
     diff_file = _argv_opt("--diff-file")
     diff_text = Path(diff_file).read_text("utf-8") if diff_file else sys.stdin.read()
 
-    status, note, findings, truncated = "ok", "", [], False
+    status, note, findings = "ok", "", []
     try:
         if not diff_text.strip():
             status, note = "blocked", "diff 为空"
         else:
-            clipped, truncated = truncate_diff(diff_text, max_chars)
-            findings = run_talon(clipped)
+            findings = run_talon(diff_text)
     except Exception as exc:  # noqa: BLE001 — any failure becomes a blocked comment
         status, note = "blocked", f"{type(exc).__name__}: {exc}"
 
     comment_status = "blocked" if status == "blocked" else (
         "security-issues-found" if findings else "no-obvious-security-issue"
     )
-    markdown = build_comment(revision_id, findings, comment_status, note, truncated)
+    markdown = build_comment(revision_id, findings, comment_status, note)
 
     sev_counts: dict[str, int] = {}
     for f in findings:
