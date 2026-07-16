@@ -32,6 +32,25 @@ import urllib.request
 from pathlib import Path
 
 MARKER_PREFIX = "workmate-security-diff-review-talon"
+DEFAULT_SECRETS_FILE = "/workspace/workmate/.workmate/secrets/phabricator.env"
+
+
+# --------------------------------------------------------------------------- secrets
+
+def load_env_file(path: Path) -> None:
+    """Load KEY=VALUE lines from a .env secrets file into os.environ (real env wins via setdefault)."""
+    if not path.is_file():
+        return
+    for line in path.read_text("utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):]
+        if "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
 
 
 # --------------------------------------------------------------------------- Conduit (stdlib only)
@@ -216,6 +235,7 @@ def resolve_revision() -> str:
 
 
 def main() -> int:
+    load_env_file(Path(os.environ.get("PHA_SECRETS_FILE", DEFAULT_SECRETS_FILE)))
     post = os.environ.get("POST_COMMENT", "1") != "0"
     max_chars = int(os.environ.get("MAX_DIFF_CHARS", "60000"))
 
