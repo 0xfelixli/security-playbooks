@@ -5,8 +5,8 @@ No Phabricator I/O — the playbook actor fetches the diff and posts the comment
 
     talon_review.py --revision D118482 < changed.diff
 
-Env: TALON_DIR (default /workspace/cobo-code-security-review), TALON_CMD ("uv run talon"),
-TALON_TIMEOUT (3000), MAX_DIFF_CHARS (600000).
+Env: TALON_CMD (default "talon" on PATH; set "uv run talon" for a checkout), TALON_DIR (optional
+cwd for a checkout install), TALON_TIMEOUT (3000), MAX_DIFF_CHARS (600000).
 """
 from __future__ import annotations
 
@@ -47,26 +47,29 @@ def truncate_diff(text: str, max_chars: int) -> tuple[str, bool]:
 
 def run_talon(diff_text: str) -> list[dict]:
     """Pipe the diff into `talon --diff-file - -n`, return the findings list."""
-    talon_dir = Path(os.environ.get("TALON_DIR", "/workspace/cobo-code-security-review"))
-    if not talon_dir.is_dir():
-        raise RuntimeError(f"TALON_DIR not found: {talon_dir}")
-    cmd = os.environ.get("TALON_CMD", "uv run talon").split()
+    talon_dir_env = os.environ.get("TALON_DIR", "").strip()
+    talon_dir = Path(talon_dir_env) if talon_dir_env else None
+    if talon_dir is not None and not talon_dir.is_dir():
+        raise RuntimeError(f"TALON_DIR set but not a dir: {talon_dir}")
+    cwd = str(talon_dir) if talon_dir else None
+    cmd = os.environ.get("TALON_CMD", "talon").split()  # PATH-installed talon; override "uv run talon" for a checkout
     cmd += ["--diff-file", "-", "-n"]
     proc = subprocess.run(
         cmd,
-        cwd=str(talon_dir),
+        cwd=cwd,
         input=diff_text,
         capture_output=True,
         text=True,
         timeout=int(os.environ.get("TALON_TIMEOUT", "3000")),
     )
     combined = (proc.stdout or "") + "\n" + (proc.stderr or "")
+    base = talon_dir if talon_dir else Path.cwd()
     candidates = []
     m = re.search(r"Report:\s*(\S+)", combined)
     if m:
         candidates.append(Path(m.group(1).strip()) / "vulnerabilities.json")
     candidates += sorted(
-        talon_dir.glob("talon_runs/*/vulnerabilities.json"),
+        base.glob("talon_runs/*/vulnerabilities.json"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
